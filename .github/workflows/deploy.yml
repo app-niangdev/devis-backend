@@ -86,7 +86,7 @@ jobs:
             docker compose pull backend
             docker compose up -d backend
             # En www-data : les fichiers créés (logs, cache) restent accessibles à PHP-FPM
-            docker compose exec -T -u www-data backend php artisan migrate --force
+            docker compose exec -T -u www-data backend php artisan migrate:fresh --force
             # Rôles et menus de l'admin : idempotents, rejoués à chaque déploiement
             docker compose exec -T -u www-data backend php artisan db:seed --class=RoleSeeder --force
             docker compose exec -T -u www-data backend php artisan db:seed --class=MenuSeeder --force
