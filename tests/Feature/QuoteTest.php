@@ -43,7 +43,7 @@ class QuoteTest extends TestCase
     private function createQuote(array $overrides = []): array
     {
         return $this->asUser($this->manager)
-            ->postJson('/api/v1/manager/quotes', $this->payload($overrides))
+            ->postJson('/api/manager/quotes', $this->payload($overrides))
             ->assertCreated()
             ->json('payload');
     }
@@ -74,7 +74,7 @@ class QuoteTest extends TestCase
         $otherCustomer = Customer::create(['tenant_id' => $other->id, 'name' => 'X', 'phone' => '771112233']);
 
         $first = $this->asUser($otherManager)
-            ->postJson('/api/v1/manager/quotes', $this->payload(['customer' => ['mode' => 'existing', 'id' => $otherCustomer->id]]))
+            ->postJson('/api/manager/quotes', $this->payload(['customer' => ['mode' => 'existing', 'id' => $otherCustomer->id]]))
             ->json('payload.quote_number');
         $this->assertStringEndsWith('-0001', $first);
     }
@@ -82,11 +82,11 @@ class QuoteTest extends TestCase
     public function test_deposit_rules(): void
     {
         $this->asUser($this->manager)
-            ->postJson('/api/v1/manager/quotes', $this->payload(['deposit_type' => 'amount', 'deposit_value' => 200000]))
+            ->postJson('/api/manager/quotes', $this->payload(['deposit_type' => 'amount', 'deposit_value' => 200000]))
             ->assertStatus(422);
 
         $this->asUser($this->manager)
-            ->postJson('/api/v1/manager/quotes', $this->payload(['deposit_type' => 'percent', 'deposit_value' => 120]))
+            ->postJson('/api/manager/quotes', $this->payload(['deposit_type' => 'percent', 'deposit_value' => 120]))
             ->assertStatus(422);
 
         $quote = $this->createQuote(['deposit_type' => 'amount', 'deposit_value' => 50000]);
@@ -100,7 +100,7 @@ class QuoteTest extends TestCase
     public function test_discount_cannot_exceed_subtotal(): void
     {
         $this->asUser($this->manager)
-            ->postJson('/api/v1/manager/quotes', $this->payload(['discount' => 999999]))
+            ->postJson('/api/manager/quotes', $this->payload(['discount' => 999999]))
             ->assertStatus(422)
             ->assertJsonValidationErrors('discount');
     }
@@ -118,27 +118,27 @@ class QuoteTest extends TestCase
         $id = $this->createQuote()['id'];
         $api = $this->asUser($this->manager);
 
-        $api->postJson("/api/v1/manager/quotes/{$id}/decision", ['decision' => 'accepted'])->assertStatus(422);
-        $api->putJson("/api/v1/manager/quotes/{$id}/deposit", ['amount' => 45000, 'received_at' => today()->toDateString(), 'payment_method' => 'wave'])->assertStatus(422);
+        $api->postJson("/api/manager/quotes/{$id}/decision", ['decision' => 'accepted'])->assertStatus(422);
+        $api->putJson("/api/manager/quotes/{$id}/deposit", ['amount' => 45000, 'received_at' => today()->toDateString(), 'payment_method' => 'wave'])->assertStatus(422);
 
-        $api->postJson("/api/v1/manager/quotes/{$id}/mark-sent")->assertOk()->assertJsonPath('payload.status', 'sent');
-        $api->postJson("/api/v1/manager/quotes/{$id}/decision", ['decision' => 'accepted'])->assertOk()->assertJsonPath('payload.is_editable', false);
-        $api->postJson("/api/v1/manager/quotes/{$id}/decision", ['decision' => 'refused'])->assertStatus(422);
+        $api->postJson("/api/manager/quotes/{$id}/mark-sent")->assertOk()->assertJsonPath('payload.status', 'sent');
+        $api->postJson("/api/manager/quotes/{$id}/decision", ['decision' => 'accepted'])->assertOk()->assertJsonPath('payload.is_editable', false);
+        $api->postJson("/api/manager/quotes/{$id}/decision", ['decision' => 'refused'])->assertStatus(422);
 
-        $api->putJson("/api/v1/manager/quotes/{$id}", $this->payload())->assertStatus(422);
-        $api->deleteJson("/api/v1/manager/quotes/{$id}")->assertStatus(422);
+        $api->putJson("/api/manager/quotes/{$id}", $this->payload())->assertStatus(422);
+        $api->deleteJson("/api/manager/quotes/{$id}")->assertStatus(422);
 
-        $api->putJson("/api/v1/manager/quotes/{$id}/deposit", ['amount' => 20000, 'received_at' => today()->toDateString(), 'payment_method' => 'orange_money'])
+        $api->putJson("/api/manager/quotes/{$id}/deposit", ['amount' => 20000, 'received_at' => today()->toDateString(), 'payment_method' => 'orange_money'])
             ->assertOk()
             ->assertJsonPath('payload.deposit_status', 'partial');
-        $api->putJson("/api/v1/manager/quotes/{$id}/deposit", ['amount' => 45000, 'received_at' => today()->toDateString(), 'payment_method' => 'cash'])
+        $api->putJson("/api/manager/quotes/{$id}/deposit", ['amount' => 45000, 'received_at' => today()->toDateString(), 'payment_method' => 'cash'])
             ->assertOk()
             ->assertJsonPath('payload.deposit_status', 'received');
-        $api->putJson("/api/v1/manager/quotes/{$id}/deposit", ['amount' => 45000, 'received_at' => today()->addDay()->toDateString(), 'payment_method' => 'cash'])
+        $api->putJson("/api/manager/quotes/{$id}/deposit", ['amount' => 45000, 'received_at' => today()->addDay()->toDateString(), 'payment_method' => 'cash'])
             ->assertStatus(422);
-        $api->deleteJson("/api/v1/manager/quotes/{$id}/deposit")->assertOk()->assertJsonPath('payload.deposit_status', 'pending');
+        $api->deleteJson("/api/manager/quotes/{$id}/deposit")->assertOk()->assertJsonPath('payload.deposit_status', 'pending');
 
-        $copy = $api->postJson("/api/v1/manager/quotes/{$id}/duplicate")->assertCreated()->json('payload');
+        $copy = $api->postJson("/api/manager/quotes/{$id}/duplicate")->assertCreated()->json('payload');
         $this->assertSame('draft', $copy['status']);
         $this->assertNull($copy['deposit_received']);
         $this->assertCount(2, $copy['items']);
@@ -149,12 +149,12 @@ class QuoteTest extends TestCase
         $id = $this->createQuote()['id'];
         $api = $this->asUser($this->manager);
 
-        $api->putJson("/api/v1/manager/quotes/{$id}", $this->payload([
+        $api->putJson("/api/manager/quotes/{$id}", $this->payload([
             'items' => [['kind' => 'labor', 'designation' => 'Réparation', 'quantity' => 2, 'unit_price' => 10000]],
             'discount' => 0,
         ]))->assertOk()->assertJsonPath('payload.total_amount', 20000)->assertJsonPath('payload.deposit_amount', 6000);
 
-        $api->deleteJson("/api/v1/manager/quotes/{$id}")->assertOk();
+        $api->deleteJson("/api/manager/quotes/{$id}")->assertOk();
         $this->assertSoftDeleted('quotes', ['id' => $id]);
     }
 
@@ -164,7 +164,7 @@ class QuoteTest extends TestCase
         $this->createQuote();
 
         $this->asUser($this->manager)
-            ->getJson('/api/v1/manager/quotes?status=expired')
+            ->getJson('/api/manager/quotes?status=expired')
             ->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('payload.0.is_expired', true);
@@ -174,7 +174,7 @@ class QuoteTest extends TestCase
     {
         $id = $this->createQuote()['id'];
 
-        $response = $this->asUser($this->manager)->get("/api/v1/manager/quotes/{$id}/pdf");
+        $response = $this->asUser($this->manager)->get("/api/manager/quotes/{$id}/pdf");
 
         $response->assertOk()->assertHeader('Content-Type', 'application/pdf');
         $this->assertStringStartsWith('%PDF', $response->getContent());
@@ -185,7 +185,7 @@ class QuoteTest extends TestCase
         $this->tenant->update(['stamp_enabled' => true]);
         $id = $this->createQuote()['id'];
 
-        $response = $this->asUser($this->manager)->get("/api/v1/manager/quotes/{$id}/pdf");
+        $response = $this->asUser($this->manager)->get("/api/manager/quotes/{$id}/pdf");
 
         $response->assertOk();
         $this->assertStringStartsWith('%PDF', $response->getContent());
@@ -196,10 +196,10 @@ class QuoteTest extends TestCase
         $id = $this->createQuote()['id'];
         $intruder = $this->manager($this->tenant());
 
-        $this->asUser($intruder)->getJson("/api/v1/manager/quotes/{$id}")->assertNotFound();
-        $this->asUser($intruder)->getJson('/api/v1/manager/quotes')->assertJsonPath('meta.total', 0);
+        $this->asUser($intruder)->getJson("/api/manager/quotes/{$id}")->assertNotFound();
+        $this->asUser($intruder)->getJson('/api/manager/quotes')->assertJsonPath('meta.total', 0);
         $this->asUser($intruder)
-            ->postJson('/api/v1/manager/quotes', $this->payload())
+            ->postJson('/api/manager/quotes', $this->payload())
             ->assertStatus(422)
             ->assertJsonValidationErrors('customer.id');
     }
@@ -208,11 +208,11 @@ class QuoteTest extends TestCase
     {
         $id = $this->createQuote()['id'];
         $api = $this->asUser($this->manager);
-        $api->postJson("/api/v1/manager/quotes/{$id}/mark-sent");
-        $api->postJson("/api/v1/manager/quotes/{$id}/decision", ['decision' => 'accepted']);
+        $api->postJson("/api/manager/quotes/{$id}/mark-sent");
+        $api->postJson("/api/manager/quotes/{$id}/decision", ['decision' => 'accepted']);
         $this->createQuote();
 
-        $api->getJson('/api/v1/manager/dashboard')
+        $api->getJson('/api/manager/dashboard')
             ->assertOk()
             ->assertJsonPath('payload.quotes.accepted.count', 1)
             ->assertJsonPath('payload.quotes.draft.count', 1)
@@ -226,11 +226,11 @@ class QuoteTest extends TestCase
         $api = $this->asUser($this->manager);
         $valid = $this->createQuote()['id'];
         $old = $this->createQuote()['id'];
-        $api->postJson("/api/v1/manager/quotes/{$valid}/mark-sent")->assertOk();
-        $api->postJson("/api/v1/manager/quotes/{$old}/mark-sent")->assertOk();
+        $api->postJson("/api/manager/quotes/{$valid}/mark-sent")->assertOk();
+        $api->postJson("/api/manager/quotes/{$old}/mark-sent")->assertOk();
         Quote::whereKey($old)->update(['valid_until' => today()->subDay()]);
 
-        $api->getJson('/api/v1/manager/dashboard')
+        $api->getJson('/api/manager/dashboard')
             ->assertOk()
             ->assertJsonPath('payload.quotes.sent.count', 2)
             ->assertJsonPath('payload.quotes.sent_expired.count', 1)

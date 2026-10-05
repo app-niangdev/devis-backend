@@ -9,7 +9,7 @@ puis se connecte en SSH au VPS pour relancer le conteneur.
 | frontend | `ghcr.io/app-niangdev/devis-frontend` | 127.0.0.1:8086   | devis.niangdev.com          |
 
 PostgreSQL est le serveur partagé du réseau Docker externe `infrastructure_net`.
-L'application Flutter appelle `https://backenddevis.niangdev.com/api/v1` (adresse fixée à la compilation).
+L'application Flutter appelle `https://backenddevis.niangdev.com/api` (adresse fixée à la compilation).
 
 ## Secrets GitHub (dans les deux dépôts)
 

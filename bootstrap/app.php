@@ -18,7 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         // Versionnée : l'application mobile installée ne se met pas à jour en même temps que l'API
-        apiPrefix: 'api/v1',
+        apiPrefix: 'api',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {

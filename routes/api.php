@@ -14,7 +14,7 @@ use App\Http\Controllers\TenantController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
-// Préfixe : /api/v1 (bootstrap/app.php)
+// Préfixe : /api (bootstrap/app.php)
 
 Route::prefix('auth')->name('auth.')->group(function () {
 

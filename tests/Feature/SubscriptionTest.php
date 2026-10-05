@@ -21,14 +21,14 @@ class SubscriptionTest extends TestCase
     public function test_new_tenant_receives_a_trial(): void
     {
         $id = $this->asUser($this->admin())
-            ->postJson('/api/v1/tenants/add', ['name' => 'Sow Électricité', 'code_website' => 'sow', 'primary_color' => '#dc2626'])
+            ->postJson('/api/tenants/add', ['name' => 'Sow Électricité', 'code_website' => 'sow', 'primary_color' => '#dc2626'])
             ->assertCreated()
             ->assertJsonPath('payload.primary_color', '#DC2626')
             ->assertJsonPath('payload.secondary_color', '#0F172A')
             ->json('payload.id');
 
         $this->asUser($this->admin())
-            ->getJson("/api/v1/subscriptions/tenant/{$id}")
+            ->getJson("/api/subscriptions/tenant/{$id}")
             ->assertJsonPath('payload.status.state', 'active')
             ->assertJsonPath('payload.status.plan', 'Essai')
             ->assertJsonPath('payload.status.ends_at', today()->addDays(29)->toDateString());
@@ -40,12 +40,12 @@ class SubscriptionTest extends TestCase
         $admin = $this->admin();
         $current = Subscription::where('tenant_id', $tenant->id)->first();
 
-        $this->asUser($admin)->postJson('/api/v1/subscriptions/add', [
+        $this->asUser($admin)->postJson('/api/subscriptions/add', [
             'tenant_id' => $tenant->id, 'plan' => 'Mensuel', 'amount' => 5000,
             'starts_at' => $current->ends_at->toDateString(), 'ends_at' => $current->ends_at->addMonth()->toDateString(),
         ])->assertStatus(422)->assertJsonPath('error_code', 'SUBSCRIPTION_OVERLAP');
 
-        $this->asUser($admin)->postJson('/api/v1/subscriptions/add', [
+        $this->asUser($admin)->postJson('/api/subscriptions/add', [
             'tenant_id' => $tenant->id, 'plan' => 'Mensuel', 'amount' => 5000,
             'starts_at' => $current->ends_at->addDay()->toDateString(), 'ends_at' => $current->ends_at->addDays(30)->toDateString(),
         ])->assertCreated();
@@ -78,7 +78,7 @@ class SubscriptionTest extends TestCase
         $manager = $this->manager($tenant);
         $tenant->update(['state' => false]);
 
-        $this->postJson('/api/v1/auth/login', ['phone' => $manager->phone_one, 'password' => 'Secret2026'])
+        $this->postJson('/api/auth/login', ['phone' => $manager->phone_one, 'password' => 'Secret2026'])
             ->assertStatus(403)
             ->assertJsonPath('error_code', 'TENANT_DISABLED');
     }
@@ -86,7 +86,7 @@ class SubscriptionTest extends TestCase
     public function test_manager_cannot_manage_subscriptions(): void
     {
         $this->asUser($this->manager($this->tenant()))
-            ->getJson('/api/v1/subscriptions/overview')
+            ->getJson('/api/subscriptions/overview')
             ->assertStatus(403);
     }
 
@@ -97,7 +97,7 @@ class SubscriptionTest extends TestCase
         Subscription::where('tenant_id', $expired->id)->update(['starts_at' => today()->subDays(40), 'ends_at' => today()->subDay()]);
 
         $this->asUser($this->admin())
-            ->getJson('/api/v1/admin/dashboard')
+            ->getJson('/api/admin/dashboard')
             ->assertOk()
             ->assertJsonPath('payload.tenants.total', 2)
             ->assertJsonPath('payload.managers', 1)

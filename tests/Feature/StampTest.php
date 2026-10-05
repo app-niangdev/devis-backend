@@ -21,7 +21,7 @@ class StampTest extends TestCase
         $tenant = $this->tenant(['name' => 'Camara & Fils', 'trade' => 'Électricien bâtiment', 'phone_call' => '777777687']);
 
         $response = $this->asUser($this->manager($tenant))
-            ->getJson('/api/v1/manager/company/stamp?color=%23b91c1c')
+            ->getJson('/api/manager/company/stamp?color=%23b91c1c')
             ->assertOk()
             ->assertJsonPath('payload.enabled', false)
             ->assertJsonPath('payload.color', '#B91C1C');
@@ -36,17 +36,17 @@ class StampTest extends TestCase
         $tenant = $this->tenant();
         $api = $this->asUser($this->manager($tenant));
 
-        $api->putJson('/api/v1/manager/company/stamp', ['enabled' => true, 'color' => '#047857'])
+        $api->putJson('/api/manager/company/stamp', ['enabled' => true, 'color' => '#047857'])
             ->assertOk()
             ->assertJsonPath('payload.enabled', true)
             ->assertJsonPath('payload.color', '#047857');
 
-        $api->getJson('/api/v1/manager/company')
+        $api->getJson('/api/manager/company')
             ->assertJsonPath('payload.stamp_enabled', true)
             ->assertJsonPath('payload.stamp_color', '#047857');
 
         // Désactivation : la couleur choisie est conservée
-        $api->putJson('/api/v1/manager/company/stamp', ['enabled' => false])
+        $api->putJson('/api/manager/company/stamp', ['enabled' => false])
             ->assertJsonPath('payload.enabled', false)
             ->assertJsonPath('payload.color', '#047857');
     }
@@ -54,7 +54,7 @@ class StampTest extends TestCase
     public function test_invalid_color_is_rejected(): void
     {
         $this->asUser($this->manager($this->tenant()))
-            ->putJson('/api/v1/manager/company/stamp', ['enabled' => true, 'color' => 'bleu'])
+            ->putJson('/api/manager/company/stamp', ['enabled' => true, 'color' => 'bleu'])
             ->assertStatus(422)
             ->assertJsonValidationErrors('color');
     }
