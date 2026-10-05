@@ -14,7 +14,7 @@ COPY . .
 RUN composer dump-autoload --optimize --no-dev
 
 # ---- Étape 2 : image d'exécution PHP-FPM + Nginx ----
-FROM php:8.3-fpm-alpine AS runtime
+FROM php:8.4-fpm-alpine AS runtime
 
 # mbstring, dom, curl : déjà compilés dans l'image officielle
 # gd (freetype/png/jpeg) : tampon de l'entreprise (StampService) et images des PDF (dompdf)
