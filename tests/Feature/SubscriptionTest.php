@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Customer;
+use App\Models\Quote;
 use App\Models\Subscription;
 use App\Services\SubscriptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -104,5 +106,37 @@ class SubscriptionTest extends TestCase
             ->assertJsonPath('payload.subscriptions.active', 1)
             ->assertJsonPath('payload.subscriptions.expired', 1)
             ->assertJsonPath('payload.attention.0.tenant_id', $expired->id);
+    }
+
+    public function test_admin_dashboard_stats_per_tenant(): void
+    {
+        $tenant = $this->tenant(['name' => 'Alpha']);
+        $manager = $this->manager($tenant);
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'name' => 'Awa Diop', 'phone' => '765554433']);
+        $quote = fn (string $status, int $total, ?int $received = null) => Quote::create([
+            'tenant_id' => $tenant->id, 'customer_id' => $customer->id, 'user_id' => $manager->id,
+            'quote_number' => 'D-' . uniqid(), 'status' => $status, 'total_amount' => $total,
+            'deposit_received_amount' => $received,
+        ]);
+        $quote(Quote::ACCEPTED, 100000, 30000);
+        $quote(Quote::ACCEPTED, 50000);
+        $quote(Quote::REFUSED, 20000);
+        $quote(Quote::SENT, 10000);
+        $quote(Quote::DRAFT, 5000);
+        $quote(Quote::ACCEPTED, 999999, 999999)->delete();
+        $this->tenant(['name' => 'Beta']);
+
+        $this->asUser($this->admin())
+            ->getJson('/api/admin/dashboard')
+            ->assertOk()
+            ->assertJsonCount(2, 'payload.tenant_stats')
+            ->assertJsonPath('payload.tenant_stats.0.tenant_name', 'Alpha')
+            ->assertJsonPath('payload.tenant_stats.0.accepted', ['count' => 2, 'total' => 150000])
+            ->assertJsonPath('payload.tenant_stats.0.refused', ['count' => 1, 'total' => 20000])
+            ->assertJsonPath('payload.tenant_stats.0.pending', ['count' => 2, 'total' => 15000])
+            ->assertJsonPath('payload.tenant_stats.0.collected', 30000)
+            ->assertJsonPath('payload.tenant_stats.1.tenant_name', 'Beta')
+            ->assertJsonPath('payload.tenant_stats.1.accepted.count', 0)
+            ->assertJsonPath('payload.tenant_stats.1.collected', 0);
     }
 }
