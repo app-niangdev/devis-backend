@@ -1,0 +1,843 @@
+# ANALYSE COMPLÈTE — ORBUS ENTREPRISE BACKEND
+
+> Analyse rédigée le 10 juin 2026 par Claude Code (Sonnet 4.6)
+
+---
+
+## SOMMAIRE
+
+1. [Libellé du sujet](#1-libellé-du-sujet)
+2. [Contexte](#2-contexte)
+3. [Problématique](#3-problématique)
+4. [Motivations](#4-motivations)
+5. [Stack technique](#5-stack-technique)
+6. [Architecture du projet](#6-architecture-du-projet)
+7. [Domaine métier et flux global](#7-domaine-métier-et-flux-global)
+8. [Acteurs du système](#8-acteurs-du-système)
+9. [Modèles de données et entités clés](#9-modèles-de-données-et-entités-clés)
+10. [Routes et endpoints API](#10-routes-et-endpoints-api)
+11. [Authentification et autorisation](#11-authentification-et-autorisation)
+12. [Intégrations externes](#12-intégrations-externes)
+13. [Structure de la base de données](#13-structure-de-la-base-de-données)
+14. [Services, DTOs et pattern DI](#14-services-dtos-et-pattern-di)
+15. [Configuration et environnement](#15-configuration-et-environnement)
+16. [Points forts et état du projet](#16-points-forts-et-état-du-projet)
+
+---
+
+## 1. Libellé du sujet
+
+**Système d'Information pour la Création d'Entreprises au Sénégal — Backend API REST (Orbus Entreprise)**
+
+Il s'agit du développement d'une **API REST Laravel** constituant le backend de la plateforme **Orbus Entreprise**, un système dématérialisé permettant la gestion complète du cycle de vie des dossiers de **création, modification et suppression d'entreprises** sur le territoire sénégalais, en interconnectant plusieurs institutions publiques : APIX/BCE, OAPI, DGID et les études notariales.
+
+---
+
+## 2. Contexte
+
+### 2.1 Cadre institutionnel
+
+Le Sénégal, à l'instar de nombreux pays africains, s'est engagé dans une politique de **simplification des procédures administratives** pour la création d'entreprises. La création d'une entreprise formelle implique traditionnellement le passage par plusieurs guichets distincts :
+
+| Institution                                                      | Rôle                                                     |
+| ---------------------------------------------------------------- | -------------------------------------------------------- |
+| **APIX / BCE** (Bureau de Création d'Entreprises)                | Réception, dépôt et validation du dossier                |
+| **OAPI** (Organisation Africaine de la Propriété Intellectuelle) | Validation et protection du nom commercial               |
+| **DGID** (Direction Générale des Impôts et Domaines)             | Immatriculation fiscale, génération de quittances        |
+| **Étude notariale**                                              | Authentification d'actes juridiques (SA, SAS, SASU, SAU) |
+| **Greffe du Tribunal de Commerce**                               | Enregistrement RCCM (prévu, non encore intégré)          |
+
+### 2.2 Problème de départ
+
+Ce processus était auparavant **entièrement papier, multi-guichet et non traçable** : les entrepreneurs devaient physiquement déposer des dossiers dans plusieurs institutions, sans visibilité sur l'avancement de leurs demandes, et les agents n'avaient aucun outil commun de suivi.
+
+### 2.3 Ce qu'est le projet
+
+**Orbus Entreprise** est un guichet unique numérique interconnectant ces institutions. Le backend analysé (`orbus-entreprise-back`) est l'**API REST centrale** qui expose l'ensemble des services à un frontend Vue.js/React séparé (port 8088), ainsi qu'à des systèmes tiers (Orbus RCCM, Orbus SCOOP, DGCPT, Osign).
+
+Le projet est hébergé sur un serveur dédié (`180.149.197.68`) avec une base PostgreSQL déportée (`167.114.2.224:5433`) et un stockage MinIO compatible S3.
+
+---
+
+## 3. Problématique
+
+> **Comment dématérialiser, orchestrer et tracer le circuit complet de création d'une entreprise au Sénégal, en impliquant plusieurs pôles institutionnels aux responsabilités distinctes, tout en garantissant la sécurité des données, la conformité des flux et la traçabilité des décisions ?**
+
+### 3.1 Sous-problèmes identifiés
+
+#### a) Orchestration multi-pôle
+
+Chaque dossier suit un circuit différent selon sa forme juridique :
+
+- Une **EI** (Entreprise Individuelle) passe par BCE → DGID directement.
+- Une **SARL avec nom commercial** passe par BCE → OAPI → DGID.
+- Une **SA** passe par BCE → OAPI → DGID → Notaire.
+
+Le système doit gérer dynamiquement ces séquences sans code dupliqué.
+
+#### b) Gestion des allers-retours
+
+Un pôle peut retourner un dossier (statut `DM` — Demande de Modification) au pôle précédent. Ces cycles doivent être versionnés pour ne pas perdre l'historique des corrections.
+
+#### c) Traçabilité et audit
+
+Chaque décision (validation, rejet, demande de modification) doit être horodatée, attribuée à un agent identifié, et irréversible dans les logs.
+
+#### d) Sécurité et cloisonnement
+
+Les agents ne doivent voir que les dossiers de leur pôle. Un agent DGID ne doit pas accéder aux dossiers en attente OAPI.
+
+#### e) Génération de documents légaux
+
+Les quittances OAPI et DGID sont des documents fiscaux et légaux qui doivent être générés automatiquement, numérotés séquentiellement, signés numériquement et immuables une fois émises.
+
+#### f) Paiement dématérialisé
+
+L'intégration avec le système de paiement public sénégalais (DGCPT via plateforme e-paiement) doit gérer les callbacks asynchrones et confirmer la recevabilité du dossier après paiement.
+
+---
+
+## 4. Motivations
+
+### 4.1 Motivations institutionnelles
+
+- **Améliorer le classement Doing Business** : réduire les délais de création d'entreprise, un des indicateurs clés du rapport Doing Business de la Banque Mondiale.
+- **Lutter contre l'informel** : faciliter la formalisation des entreprises sénégalaises en réduisant les frictions administratives.
+- **Interopérabilité inter-institutionnelle** : créer un référentiel commun des dossiers partagé entre APIX, OAPI, DGID et les notaires.
+
+### 4.2 Motivations techniques
+
+- **Remplacer un processus papier non traçable** par un système numérique avec audit complet.
+- **Unifier des systèmes hétérogènes** (Orbus RCCM, Orbus SCOOP, e-paiement DGCPT, Osign) via une API centrale.
+- **Permettre le suivi en temps réel** de l'avancement d'un dossier par toutes les parties prenantes.
+
+### 4.3 Motivations architecturales
+
+- Construire une API **scalable et stateless** (JWT) capable de supporter la montée en charge lors des pics de dépôt en début d'année fiscale.
+- Assurer la **séparation des responsabilités** entre le frontend (Vue/React) et le backend, facilitant l'évolution indépendante des deux couches.
+- Préparer l'**intégration future du Greffe** (RCCM) et de l'ANSD sans refonte majeure.
+
+---
+
+## 5. Stack technique
+
+| Composant         | Technologie                    | Version    |
+| ----------------- | ------------------------------ | ---------- |
+| Framework backend | Laravel                        | 12         |
+| Langage           | PHP                            | 8.2+       |
+| Base de données   | PostgreSQL                     | —          |
+| Stockage fichiers | MinIO (compatible S3)          | —          |
+| Authentification  | JWT (firebase/php-jwt)         | 6.11       |
+| Génération PDF    | DOMPDF + FPDI                  | 3.1 / 2.6  |
+| Export Excel      | Maatwebsite Excel              | 3.1        |
+| QR Code           | simplesoftwareio/simple-qrcode | 4.2        |
+| Client HTTP       | Guzzle                         | 7.x        |
+| Tests             | PHPUnit + Mockery + Faker      | 11.5 / 1.6 |
+| Frontend (séparé) | Vue.js / React                 | port 8088  |
+
+---
+
+## 6. Architecture du projet
+
+### 6.1 Pattern architectural : Modular Monolith
+
+Le projet adopte un **monolithe modulaire** organisé par domaine métier, opposé à un simple découpage MVC plat. Chaque module encapsule sa propre logique, ses modèles, ses routes et ses dépendances.
+
+```
+app/
+├── Modules/                  ← 8 modules métier/techniques
+│   ├── Auth/                 ← Authentification JWT
+│   ├── User/                 ← Gestion utilisateurs & rôles
+│   ├── Parametrage/          ← Référentiels (géo, juridique, tarifs)
+│   ├── Dossier/              ← Cœur métier : cycle de vie dossier
+│   ├── Quittance/            ← Quittances OAPI et DGID
+│   ├── Integration/          ← APIs externes (DGCPT, Osign, Orbus)
+│   ├── Statistique/          ← Tableaux de bord
+│   └── Document/             ← Gestion documents MinIO + PDF
+├── Core/                     ← Exceptions, helpers, middleware transverses
+├── Shared/                   ← Traits, constantes, contrats partagés
+├── Models/                   ← Modèles Eloquent legacy
+├── Http/
+│   ├── Controllers/          ← Contrôleurs legacy
+│   └── Middleware/           ← JWT, CORS, API Key, rôles
+└── Providers/
+    └── AppServiceProvider.php ← Bindings DI centralisés (261 lignes)
+```
+
+### 6.2 Structure interne de chaque module
+
+```
+Modules/Dossier/
+├── Controllers/              ← Endpoints HTTP
+├── Services/
+│   ├── Interfaces/           ← Contrats de service
+│   └── Implementation/       ← Logique métier concrète
+├── Repositories/
+│   ├── Interfaces/           ← Contrats d'accès données
+│   └── Implementation/       ← Requêtes Eloquent
+├── Shared/
+│   ├── Models/               ← Modèles Eloquent du module
+│   ├── DTOs/                 ← Data Transfer Objects
+│   ├── Requests/             ← Form Requests (validation)
+│   ├── Events/               ← Événements du domaine
+│   └── Policies/             ← Politiques d'autorisation
+├── Routes/
+│   └── api.php               ← Déclaration des routes
+└── Providers/
+    └── DossierServiceProvider.php
+```
+
+### 6.3 Couches de l'application
+
+```
+Request HTTP
+    ↓
+Middleware (JWT, CORS, API Key)
+    ↓
+Controller (validation, mapping)
+    ↓
+Service (orchestration métier)
+    ↓
+Repository (accès données)
+    ↓
+Model Eloquent (ORM)
+    ↓
+PostgreSQL
+```
+
+---
+
+## 7. Domaine métier et flux global
+
+### 7.1 Périmètre fonctionnel
+
+Le système gère la **création et le traitement de dossiers d'entreprise** depuis le dépôt public jusqu'à l'immatriculation fiscale. Les formes juridiques couvertes sont :
+
+| Forme                        | Circuit                       | Passage notaire |
+| ---------------------------- | ----------------------------- | --------------- |
+| EI (Entreprise Individuelle) | BCE → DGID                    | Non             |
+| SARL / SNC / SCS             | BCE → [OAPI] → DGID           | Non             |
+| SA / SAS / SASU / SAU        | BCE → [OAPI] → DGID → Notaire | Oui             |
+| GIE / SCOOP                  | Circuit dédié                 | Selon cas       |
+
+### 7.2 Flux complet d'un dossier
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  ÉTAPE 1 — PROMOTEUR (portail public, sans authentification)        │
+│                                                                     │
+│  POST /api/public/dossiers          → Crée dossier (INITIATED)      │
+│  POST /api/public/dossiers/{id}/doc → Upload pièces jointes         │
+│  POST /api/public/payment           → Initie paiement DGCPT         │
+│  POST /api/public/payment/callback  → Callback → statut PAID        │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│  ÉTAPE 2 — PÔLE APIX / AGENT DÉPÔT                                  │
+│                                                                     │
+│  Complète les données, valide les pièces, soumet le dossier         │
+│  POST /api/dossiers/{id}/submit → statut SOUMIS                     │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│  ÉTAPE 3 — PÔLE BCE / AGENT RECEVABILITÉ                            │
+│                                                                     │
+│  Valide la recevabilité du dossier                                  │
+│  ┌─────────────────────────────────────────────────────────┐        │
+│  │ Nom commercial présent ?                                │        │
+│  │  OUI → Route vers OAPI → ÉTAPE 4A                      │        │
+│  │  NON  → Route vers DGID → ÉTAPE 4B                     │        │
+│  └─────────────────────────────────────────────────────────┘        │
+└───────────────────────────┬─────────────────────────────────────────┘
+                ┌───────────┴────────────┐
+                ↓                        ↓
+┌──────────────────────────┐  ┌──────────────────────────────────────┐
+│  ÉTAPE 4A — PÔLE OAPI    │  │  ÉTAPE 4B — PÔLE DGID               │
+│  Agent OAPI              │  │  Agent DGID                          │
+│                          │  │                                      │
+│  Génère quittance OAPI   │  │  Génère quittance DGID               │
+│  Valide nom commercial   │  │  Immatriculation fiscale             │
+│  Délivre → DGID          │  │  Délivre → Notaire (si SA/SAS)       │
+└──────────┬───────────────┘  └──────────────────────────────────────┘
+           ↓
+┌──────────────────────────┐
+│  ÉTAPE 4B — PÔLE DGID    │
+│  (après OAPI)            │
+└──────────────────────────┘
+```
+
+### 7.3 Statuts de traitement
+
+Deux niveaux de statut coexistent :
+
+**Statut global du dossier (`doss_statut`) :**
+
+| Statut       | Description                                   |
+| ------------ | --------------------------------------------- |
+| `brouillon`  | Dossier en cours de saisie (promoteur)        |
+| `soumis`     | Dossier soumis, en attente de prise en charge |
+| `en_circuit` | Dossier en traitement dans un pôle            |
+| `delivre`    | Processus terminé avec succès                 |
+| `rejete`     | Dossier définitivement rejeté                 |
+
+**Statut d'étape (`proc_status_traitement_id`) :**
+
+| Code | Libellé                 | Description                           |
+| ---- | ----------------------- | ------------------------------------- |
+| `EC` | En Cours                | Dossier en traitement au pôle courant |
+| `DD` | Délivré                 | Étape terminée, pôle suivant activé   |
+| `DM` | Demande de Modification | Retour à l'amont pour correction      |
+| `RJ` | Rejeté                  | Dossier définitivement rejeté         |
+
+### 7.4 Versioning des cycles (allers-retours)
+
+Le champ `proc_cycle` dans `td_processing_steps` permet de gérer les allers-retours sans perte de données :
+
+- `cycle = 1` : premier passage du dossier dans ce pôle
+- `cycle = 2` : deuxième passage après une demande de modification (DM)
+- Chaque transition est enregistrée dans `td_processing_step_transitions` (table d'audit)
+
+---
+
+## 8. Acteurs du système
+
+| Acteur                 | Authentification | Rôle JWT             | Pôle    | Périmètre d'action                           |
+| ---------------------- | ---------------- | -------------------- | ------- | -------------------------------------------- |
+| **Promoteur**          | Anonyme + OTP    | —                    | —       | Dépose dossier, upload pièces, paye          |
+| **Agent Dépôt**        | JWT obligatoire  | `agent_depot`        | APIX    | Complète et soumet le dossier                |
+| **Agent Recevabilité** | JWT obligatoire  | `agent_recevabilite` | BCE     | Valide pièces, route vers OAPI ou DGID       |
+| **Agent OAPI**         | JWT obligatoire  | `agent_oapi`         | OAPI    | Génère quittance OAPI, valide nom commercial |
+| **Agent DGID**         | JWT obligatoire  | `agent_dgid`         | DGID    | Génère quittance fiscale, immatricule        |
+| **Notaire**            | JWT obligatoire  | `notaire`            | NOTAIRE | Authentifie actes pour SA/SAS/SASU/SAU       |
+| **Administrateur**     | JWT obligatoire  | `admin`              | —       | Gère utilisateurs, rôles, référentiels       |
+
+### Cloisonnement par pôle
+
+Chaque agent ne voit que les dossiers **de son pôle**. Le filtre est appliqué implicitement dans le repository :
+
+```sql
+SELECT * FROM td_dossiers
+INNER JOIN td_processing_steps ON proc_dossier_id = doss_id
+WHERE proc_pole_id = :user_pole_id
+  AND proc_status = 'EC'
+```
+
+---
+
+## 9. Modèles de données et entités clés
+
+### 9.1 Entités cœur du dossier
+
+```
+td_dossiers (134 colonnes)
+├── doss_id
+├── doss_numero_dossier_back         (ex: SN-BCE-P-00001)
+├── doss_forme_juridique_id          → tp_forme_juridiques
+├── doss_type_operation_id           → tp_type_operations
+├── doss_denomination_sociale        (raison sociale)
+├── doss_nom_commercial              (déclenche passage OAPI si renseigné)
+├── doss_sigle
+├── doss_secteur_activite_id
+├── doss_capital_social
+├── doss_statut                      (brouillon | soumis | en_circuit | delivre | rejete)
+├── doss_payment_id                  → td_payments
+└── doss_besoin_doc_rccm, doss_besoin_doc_ansd
+
+td_processing_steps
+├── proc_id
+├── proc_dossier_id                  → td_dossiers
+├── proc_pole_id                     → tp_poles (APIX, BCE, OAPI, DGID, NOTAIRE)
+├── proc_status_traitement_id        → tp_status_traitement (EC, DD, DM, RJ)
+├── proc_ordre                       (position dans le circuit)
+├── proc_cycle                       (versioning des allers-retours)
+├── proc_assigned_role               (rôle agent responsable)
+├── proc_date_soumission
+├── proc_date_delivrance
+├── proc_delivered_by                → td_users
+└── proc_motif                       (raison DM ou RJ)
+
+td_processing_step_transitions       (audit trail)
+├── Chaque changement de statut horodaté
+└── Immuable (jamais mis à jour, seulement inséré)
+```
+
+### 9.2 Entités liées au dossier
+
+```
+td_dirigeants        → Représentants légaux (gérant, président, DG...)
+td_associes          → Actionnaires / associés avec % de parts
+td_commissaires      → Commissaires aux comptes
+td_piece_jointes     → Fichiers déposés par le promoteur (stockés MinIO)
+td_dossier_documents → Documents générés ou traités (PDF, actes signés)
+td_engageurs         → Personnes engagées
+td_previous_activities → Activités antérieures
+td_capital_socials   → Détail du capital social
+```
+
+### 9.3 Entités de quittance et paiement
+
+```
+td_quittances
+├── quit_id
+├── quit_numero_quittance            (OAPI-2026-00001, DGID-2026-00001)
+├── quit_dossier_id
+├── quit_pole_id                     (OAPI ou DGID)
+├── quit_montant
+├── quit_payment_type                (ESPECE, CHEQUE, VIREMENT, MOBILE_MONEY)
+├── quit_banque_id
+├── quit_date_versement / heure
+├── quit_date_retrait / heure
+├── quit_is_locked                   (immuable une fois générée)
+└── quit_created_by, quit_updated_by
+
+td_payments
+├── paym_id
+├── paym_numero_reference
+├── paym_dgcpt_transaction_id        (référence DGCPT)
+├── paym_dgcpt_status
+├── paym_montant_total
+└── paym_status                      (true = paiement confirmé)
+```
+
+### 9.4 Entités utilisateur
+
+```
+td_users
+├── use_id, use_nom, use_prenom
+├── use_email, use_password
+├── use_role_id                      → tp_roles
+├── use_pole_id                      → tp_poles
+├── use_region_id, use_departement_id (filtre géographique des dossiers)
+├── use_notary_firm_id               (si rôle = notaire)
+├── use_statut                       (actif / inactif)
+└── use_is_first_login               (mail setup premier mot de passe)
+
+tp_roles              (admin, agent_depot, agent_recevabilite, agent_oapi, agent_dgid, notaire)
+tp_menus              (navigation frontend selon rôle)
+tp_menu_role          (pivot rôle ↔ menu)
+td_refresh_tokens     (JWT refresh stateless)
+td_otps               (OTP pour promoteur anonyme)
+```
+
+### 9.5 Référentiels métier (Parametrage)
+
+| Catégorie     | Tables                                                                                       |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| Géographie    | `tp_pays`, `tp_regions`, `tp_departements`                                                   |
+| Juridique     | `tp_forme_juridiques`, `tp_type_operations`, `tp_origines`, `tp_type_dossiers`               |
+| Professionnel | `tp_fonctions`, `tp_civilities`, `tp_genres`, `tp_nationalities`, `tp_matrimonials`          |
+| Exploitation  | `tp_poles`, `tp_status_traitement`, `tp_circuits`, `tp_secteur_activites`                    |
+| Tarification  | `tp_packs`, `tp_services`, `tp_pricings`, `tp_pricing_labels`, `tp_pricing_label_operations` |
+| Paiement      | `tp_banques`, `tp_mode_paiements`                                                            |
+| Juridique doc | `tp_type_pieces`, `tp_objection_declarations`                                                |
+| Notariat      | `tp_notary_firms`                                                                            |
+
+---
+
+## 10. Routes et endpoints API
+
+### 10.1 Authentification
+
+```
+POST   /api/auth/register              → Création compte agent (email setup)
+POST   /api/auth/login                 → Connexion → JWT + refresh_token
+POST   /api/auth/refresh               → Renouveler l'access token
+POST   /api/auth/logout                → Invalidation du refresh_token
+GET    /api/auth/me                    → Profil de l'utilisateur connecté
+GET    /api/auth/menus                 → Menus accessibles selon rôle
+```
+
+### 10.2 Dossiers
+
+```
+# Portail public (sans authentification)
+POST   /api/public/dossiers
+POST   /api/public/dossiers/{id}/documents
+POST   /api/public/payment
+POST   /api/public/payment/callback
+POST   /api/public/search-name         → Vérification nom commercial (Orbus)
+
+# Authentifié (JWT)
+GET    /api/dossiers                   → Liste (filtrée par pôle/rôle)
+GET    /api/dossiers/{id}
+PUT    /api/dossiers/{id}
+DELETE /api/dossiers/{id}
+POST   /api/dossiers/{id}/submit       → Soumettre au pôle suivant
+POST   /api/dossiers/check-denomination
+
+GET    /api/dossiers/{id}/associes
+POST   /api/dossiers/{id}/associes
+GET    /api/dossiers/{id}/dirigeants
+POST   /api/dossiers/{id}/dirigeants
+GET    /api/dossiers/{id}/commissaires
+
+POST   /api/dossiers/{id}/documents
+GET    /api/dossiers/{id}/documents/{docId}
+GET    /api/dossiers/{id}/documents/{docId}/url   → URL pré-signée MinIO
+```
+
+### 10.3 Quittances OAPI
+
+```
+GET    /api/oapi/index
+GET    /api/oapi/demande-quittance-recu
+GET    /api/oapi/generate-quittance/{doss}/{state}
+POST   /api/oapi/generate-quittance/{doss}/{state}
+POST   /api/oapi/sign-quittance/{id}
+POST   /api/oapi/deliver-quittance/{doss}
+POST   /api/oapi/demande-modification
+POST   /api/oapi/reject-dossier/{doss}
+
+GET    /api/quittances/view-oapi/{numero}
+GET    /api/quittances/export-oapi/{numero}        → Export PDF
+```
+
+### 10.4 Quittances DGID
+
+```
+GET    /api/dgid/index
+GET    /api/dgid/demande-quittance-recu
+GET    /api/dgid/generate-quittance/{doss}/{state}
+POST   /api/dgid/generate-quittance/{doss}/{state}
+POST   /api/dgid/deliver-quittance/{doss}
+POST   /api/dgid/demande-modification
+
+GET    /api/quittances/view-dgid/{numero}
+GET    /api/quittances/export-dgid/{numero}        → Export PDF
+```
+
+### 10.5 Référentiels (tous publics, sans auth)
+
+```
+GET    /api/parametrage/pays
+GET    /api/parametrage/regions
+GET    /api/parametrage/departements/region/{id}
+GET    /api/parametrage/forme-juridiques
+GET    /api/parametrage/type-operations
+GET    /api/parametrage/type-pieces
+GET    /api/parametrage/secteur-activites
+GET    /api/parametrage/fonctions
+GET    /api/parametrage/civilites
+GET    /api/parametrage/origines
+GET    /api/parametrage/objection-declarations
+GET    /api/parametrage/pieces-jointes/forme-juridique/{id}
+```
+
+### 10.6 Administration
+
+```
+GET    /api/users
+PATCH  /api/users/{id}
+PATCH  /api/users/{id}/toggle-status
+GET    /api/roles
+```
+
+---
+
+## 11. Authentification et autorisation
+
+### 11.1 JWT stateless (firebase/php-jwt)
+
+Le système utilise une authentification **JWT stateless** à deux tokens :
+
+| Token           | Durée de vie          | Usage                            |
+| --------------- | --------------------- | -------------------------------- |
+| `access_token`  | 5 heures (300 min)    | Accès aux endpoints protégés     |
+| `refresh_token` | 30 jours (43 200 min) | Renouvellement de l'access token |
+
+**Payload du JWT :**
+
+```json
+{
+    "sub": "user_id",
+    "name": "Prénom Nom",
+    "email": "agent@institution.sn",
+    "role": "agent_dgid",
+    "pole": "DGID",
+    "iat": 1718000000,
+    "exp": 1718018000
+}
+```
+
+### 11.2 Middleware actifs
+
+| Middleware          | Rôle                                                                           |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `JwtAuthMiddleware` | Valide le JWT sur tous les endpoints sauf whitelist publics                    |
+| `ApiKeyMiddleware`  | Clé API pour systèmes tiers (Orbus RCCM, Orbus SCOOP)                          |
+| `CorsMiddleware`    | CORS pour frontend (`localhost:5173`, `localhost:3000`, `180.149.197.68:8088`) |
+| `ForceJsonResponse` | Force `Content-Type: application/json` sur toutes les réponses                 |
+
+### 11.3 Cloisonnement par rôle et pôle
+
+Les agents n'accèdent qu'aux dossiers de leur pôle. Ce filtrage est appliqué au niveau du Repository, pas du Controller, garantissant qu'aucun oubli de filtre dans un endpoint ne compromet l'isolation.
+
+---
+
+## 12. Intégrations externes
+
+### 12.1 DGCPT — Paiement public
+
+- **URL** : `https://epaiement-dev.open-it.sn:576a/api/paie/v1/`
+- **Auth** : Basic Auth + `X-ORGANISATION-API-KEY`
+- **Flux** : initiation paiement → callback asynchrone → confirmation dossier
+- **Module** : `Integration/Services/Implementation/DgcptPaymentService`
+
+### 12.2 Orbus Entreprise API — Nom commercial
+
+- **URL** : `http://167.114.2.224:8094/api/v1/`
+- **Auth** : HTTP Basic (`LOGIN_OE_API` / `PASSWORD_OE_API`)
+- **Usage** : vérification de l'unicité du nom commercial avant soumission
+- **Service** : `app/Services/OrbusEntrepriseApiService`
+
+### 12.3 Osign — Signature numérique
+
+- **Type** : service externe de signature PDF avec certificats
+- **Usage** : signature des quittances OAPI/DGID et des actes notariaux
+- **Module** : `Integration/Services/Implementation/OsignService`
+- **Endpoint** : `POST /api/osign/sign`
+
+### 12.4 Stockage MinIO / S3
+
+- **Endpoint** : `http://180.149.197.68:9000`
+- **Bucket** : `der`
+- **Auth** : Access Key + Secret Key
+- **Usage** : stockage des pièces jointes et documents générés (PDF quittances)
+- **Config** : `AWS_USE_PATH_STYLE_ENDPOINT=true` (requis pour MinIO)
+
+---
+
+## 13. Structure de la base de données
+
+### 13.1 Convention de nommage
+
+- Préfixe **`td_`** : tables de données transactionnelles (données métier évolutives)
+- Préfixe **`tp_`** : tables de paramétrage/référentiels (données stables)
+
+### 13.2 Tables principales
+
+```
+DONNÉES TRANSACTIONNELLES (td_)
+├── td_users                          Utilisateurs agents
+├── td_dossiers                       Dossiers d'entreprise (134 colonnes)
+├── td_processing_steps               Historique de passage par pôle
+├── td_processing_step_transitions    Audit trail des changements de statut
+├── td_dirigeants                     Représentants légaux
+├── td_associes                       Associés / actionnaires
+├── td_commissaires                   Commissaires aux comptes
+├── td_dossier_commissaires           Pivot dossier ↔ commissaires
+├── td_piece_jointes                  Fichiers uploadés
+├── td_dossier_documents              Documents MinIO traités
+├── td_engageurs                      Personnes engagées
+├── td_previous_activities            Activités antérieures
+├── td_capital_socials                Détail capital social
+├── td_payments                       Paiements DGCPT
+├── td_payment_pricing                Détail tarification
+├── td_quittances                     Quittances OAPI / DGID
+├── td_demande_modifications          Demandes de retour pour correction
+├── td_demande_rejets                 Rejets définitifs
+├── td_refresh_tokens                 Refresh tokens JWT
+├── td_otps                           OTP promoteur anonyme
+└── td_signatures                     Signatures numériques
+
+RÉFÉRENTIELS (tp_)
+├── tp_roles                          Rôles (6 rôles métier)
+├── tp_menus                          Navigation frontend
+├── tp_menu_role                      Pivot rôle ↔ menu
+├── tp_poles                          Pôles institutionnels
+├── tp_status_traitement              Statuts EC / DD / DM / RJ
+├── tp_circuits                       Séquences de pôles par forme juridique
+├── tp_pays / tp_regions / tp_departements
+├── tp_forme_juridiques               EI, SARL, SA, SAS, GIE, SCOOP...
+├── tp_type_operations                Création, modification, suppression...
+├── tp_secteur_activites
+├── tp_fonctions                      Gérant, Président, DG...
+├── tp_type_pieces                    CNI, Passeport, Titre séjour...
+├── tp_banques
+├── tp_notary_firms                   Cabinets notariaux
+├── tp_packs / tp_services / tp_pricings
+├── tp_pricing_labels                 Libellés de frais
+└── tp_pricing_label_operations       Montants par forme juridique
+```
+
+### 13.3 Migrations notables (chronologie)
+
+| Date       | Migration                                         | Signification                          |
+| ---------- | ------------------------------------------------- | -------------------------------------- |
+| 2025-09    | `create_td_dossiers_table`                        | Création du modèle cœur (134 colonnes) |
+| 2026-05    | `create_tp_poles_table`                           | Modélisation des pôles institutionnels |
+| 2026-05    | `create_td_processing_steps_table`                | Circuit de traitement multi-pôle       |
+| 2026-05    | `create_td_quittances_table`                      | Module quittances OAPI/DGID            |
+| 2026-06    | `create_signatures_table`                         | Signature numérique                    |
+| 2026-06    | `add_cycle_and_assigned_role_to_processing_steps` | Versioning allers-retours              |
+| 2026-06    | `create_td_processing_step_transitions_table`     | Table d'audit des transitions          |
+| 2026-06-10 | `add_doss_besoin_doc_to_td_dossiers_table`        | Drapeaux documents RCCM/ANSD           |
+
+---
+
+## 14. Services, DTOs et pattern DI
+
+### 14.1 Pattern Dependency Injection
+
+Tous les bindings interface → implémentation sont centralisés dans `app/Providers/AppServiceProvider.php` :
+
+```php
+// Extrait illustratif
+$this->app->bind(DossierRepositoryInterface::class, DossierRepository::class);
+$this->app->bind(DossierServiceInterface::class, DossierService::class);
+$this->app->bind(QuittanceRepositoryInterface::class, QuittanceRepository::class);
+$this->app->bind(QuittanceServiceInterface::class, QuittanceService::class);
+// ... ~130 bindings au total
+```
+
+Cela permet le **test unitaire par injection de mocks** et le remplacement facile d'une implémentation sans toucher aux controllers.
+
+### 14.2 DTOs (Data Transfer Objects)
+
+Les DTOs découplent le contrat API du modèle Eloquent interne :
+
+```
+Dossier/Shared/DTOs/
+├── DossierDTO
+├── DirigeantDTO, AssocieDTO, CommissaireDTO
+├── PieceJointeDTO, DossierDocumentDTO
+├── ObjectionDeclarationDTO, OrigineDTO
+└── BaseSearchParamsDTO                  (pagination/filtrage générique)
+
+Quittance/Shared/DTOs/
+├── QuittanceDTO
+├── GenerateQuittanceDTO, DemandeQuittanceDTO
+└── ChartFilterDTO
+
+Parametrage/Shared/DTOs/
+└── PaysDTO, RegionDTO, DepartementDTO, FormeJuridiqueDTO...
+```
+
+### 14.3 Form Requests (validation Laravel)
+
+Chaque endpoint d'écriture dispose d'un Form Request dédié :
+
+```
+DossierStoreRequest, DossierUpdateRequest
+DirigeantStoreRequest, DirigeantUpdateRequest
+AssocieRequest, CommissaireSearchRequest
+DossierDocumentStoreRequest
+DossierModificationRequest, DossierStepValidationRequest
+PieceJointeUploadRequest
+DossierCheckDenominationRequest
+```
+
+### 14.4 Helpers de réponse API
+
+Toutes les réponses JSON sont uniformisées via `ApiResponse` :
+
+```php
+ApiResponse::success($data, $message, $code = 200)
+ApiResponse::error($message, $code, $errors = [])
+ApiResponse::paginated($data, $total, $per_page)
+```
+
+---
+
+## 15. Configuration et environnement
+
+### 15.1 Variables d'environnement clés (.env)
+
+```env
+# Application
+APP_URL=http://180.149.197.68:8089/api
+FRONTEND_URL=http://180.149.197.68:8088
+
+# Base de données PostgreSQL
+DB_CONNECTION=pgsql
+DB_HOST=167.114.2.224
+DB_PORT=5433
+DB_DATABASE=derJp
+
+# JWT
+JWT_TTL=300           # 5 heures
+JWT_REFRESH_TTL=43200 # 30 jours
+JWT_SECRET=...
+
+# Stockage MinIO
+AWS_ENDPOINT=http://180.149.197.68:9000
+AWS_BUCKET=der
+AWS_USE_PATH_STYLE_ENDPOINT=true
+
+# Intégration DGCPT
+DGCPT_BASE_URL=https://epaiement-dev.open-it.sn:576a/api/paie/v1/
+
+# APIs Orbus
+API_KEY_ORBUS_RCCM=...
+API_KEY_ORBUS_SCOOP=...
+
+# CORS
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,http://180.149.197.68:8088
+```
+
+### 15.2 Fichiers de configuration spécifiques
+
+| Fichier                 | Contenu                                               |
+| ----------------------- | ----------------------------------------------------- |
+| `config/oe_api.php`     | Configuration API Orbus Entreprise (URL, credentials) |
+| `config/scoop_api.php`  | Configuration API Orbus SCOOP                         |
+| `config/filesystem.php` | MinIO / S3                                            |
+| `config/queue.php`      | File de travaux (driver : database)                   |
+
+---
+
+## 16. Points forts et état du projet
+
+### 16.1 Points forts architecturaux
+
+1. **Modular Monolith bien structuré** : chaque module est autonome, testable et remplaçable indépendamment.
+2. **Audit trail complet** : `td_processing_steps` + `td_processing_step_transitions` tracent chaque décision avec horodatage et agent responsable. Aucune donnée n'est écrasée.
+3. **JWT stateless** : facilite le déploiement multi-instance sans session partagée.
+4. **DTOs omniprésents** : le contrat API est stable même si le modèle BD évolue.
+5. **Quittances immuables** : `quit_is_locked = true` dès génération, garantissant l'intégrité des documents fiscaux.
+6. **Cloisonnement pôle-rôle** : appliqué au niveau Repository, pas laissé à la discrétion du Controller.
+7. **Tarification flexible** : `pricing_labels` + `pricing_label_operations` permettent de gérer des montants différents selon la forme juridique sans changement de code.
+
+### 16.2 Refactoring en cours (juin 2026)
+
+Le projet est actuellement en phase de **migration de la gestion des statuts** :
+
+- Introduction du champ `proc_cycle` pour versionner les allers-retours.
+- Création de `td_processing_step_transitions` comme table d'audit immuable.
+- Migration des anciens enregistrements vers la nouvelle structure.
+
+Ce refactoring est documenté dans [CIRCUIT_REFACTOR_PLAN.md](CIRCUIT_REFACTOR_PLAN.md).
+
+### 16.3 Fonctionnalités prévues (roadmap)
+
+- Intégration **Greffe du Tribunal** (RCCM) : déjà préparée avec `doss_besoin_doc_rccm` et API Key Orbus RCCM.
+- Intégration **ANSD** : champ `doss_besoin_doc_ansd` déjà présent.
+- Module **Statistique** : tableaux de bord par pôle et par période.
+- Module **Document** : gestion avancée des documents MinIO avec versioning.
+- **Politiques d'autorisation** Laravel (Policies) : documentées dans [POLICIES_TODO.md](POLICIES_TODO.md).
+
+### 16.4 Documentation existante
+
+| Fichier                                                          | Contenu                                    |
+| ---------------------------------------------------------------- | ------------------------------------------ |
+| [CIRCUIT_GLOBAL.md](CIRCUIT_GLOBAL.md)                           | Flux complet, transitions, matrice statuts |
+| [CIRCUIT_DGID.md](CIRCUIT_DGID.md)                               | Circuit DGID détaillé avec mutations BD    |
+| [CIRCUIT_REFACTOR_PLAN.md](CIRCUIT_REFACTOR_PLAN.md)             | Plan de migration statuts                  |
+| [MODULES.md](MODULES.md)                                         | Architecture modulaire, interfaces         |
+| [STRUCTURE_DONNEES_API.md](STRUCTURE_DONNEES_API.md)             | Payloads JSON dossier EI                   |
+| [FLUX_VALIDATION_DONNEES.md](FLUX_VALIDATION_DONNEES.md)         | Validation client → backend                |
+| [SYSTEME_INSCRIPTION_COMPLET.md](SYSTEME_INSCRIPTION_COMPLET.md) | Inscription sans mot de passe              |
+| [ADMINISTRATION_USERS.md](ADMINISTRATION_USERS.md)               | Gestion utilisateurs & rôles               |
+| [PAYLOADS.md](PAYLOADS.md)                                       | Payloads promoteur & agent dépôt           |
+
+---
+
+## En résumé
+
+**Orbus Entreprise Backend** est une **API REST Laravel 12** qui dématérialise le processus de création d'entreprise au Sénégal. Elle orchestre le passage d'un dossier entre 4 à 5 institutions publiques (APIX/BCE, OAPI, DGID, Notaire), avec un audit complet de chaque décision, une génération automatique de quittances fiscales légales, et une intégration avec le système de paiement public (DGCPT).
+
+L'architecture Modular Monolith, le pattern DI Container, les DTOs et les JWT stateless en font une base solide et évolutive, prête pour les intégrations futures (Greffe, ANSD) et la scalabilité horizontale.
+
+---
+
+_Document généré le 10 juin 2026 — Analyse automatique par Claude Code (claude-sonnet-4-6)_
