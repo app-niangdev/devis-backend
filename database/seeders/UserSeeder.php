@@ -35,7 +35,7 @@ class UserSeeder extends Seeder
         }
 
         // Administrateur de la plateforme : connexion par e-mail
-        User::firstOrCreate(['email' => 'niang@yopmail.com'], [
+        User::firstOrCreate(['email' => 'niangdev031299@gmail.com'], [
             'first_name' => 'Ibrahima',
             'last_name'  => 'Niang',
             'phone_one'  => '770906538',
