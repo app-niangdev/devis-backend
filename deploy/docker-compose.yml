@@ -1,0 +1,45 @@
+# # /opt/devis/docker-compose.yml (variables du backend dans /opt/devis/backend/.env)
+# # PostgreSQL est partagé : il tourne sur le réseau externe infrastructure_net.
+# # Ports exposés uniquement en local : le Nginx de l'hôte fait le proxy HTTPS.
+# services:
+#   backend:
+#     image: ghcr.io/app-niangdev/devis-backend:latest
+#     container_name: backend-devis
+#     restart: unless-stopped
+#     env_file:
+#       - ./backend/.env
+#     ports:
+#       - "127.0.0.1:8087:80"
+#     volumes:
+#       # Logos des entreprises : conservés d'un déploiement à l'autre
+#       - backend_storage:/var/www/storage
+#     networks:
+#       - infrastructure_net
+#     healthcheck:
+#       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/up"]
+#       interval: 30s
+#       timeout: 5s
+#       start_period: 40s
+#       retries: 3
+#     mem_limit: 512m
+#     logging: &logging
+#       driver: json-file
+#       options:
+#         max-size: "10m"
+#         max-file: "3"
+
+#   frontend:
+#     image: ghcr.io/app-niangdev/devis-frontend:latest
+#     container_name: frontend-devis
+#     restart: unless-stopped
+#     ports:
+#       - "127.0.0.1:8086:80"
+#     mem_limit: 64m
+#     logging: *logging
+
+# volumes:
+#   backend_storage:
+
+# networks:
+#   infrastructure_net:
+#     external: true

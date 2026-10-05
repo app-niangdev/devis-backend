@@ -19,7 +19,9 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:4200', '*'],
+    // JWT dans le corps (pas de cookies) : toutes origines par défaut, restreignable en production
+    // ex. CORS_ALLOWED_ORIGINS=https://devis.niangdev.com,https://app-devis.niangdev.com
+    'allowed_origins' => array_values(array_filter(array_map('trim', explode(',', (string) env('CORS_ALLOWED_ORIGINS', '*'))))),
 
     'allowed_origins_patterns' => [],
 

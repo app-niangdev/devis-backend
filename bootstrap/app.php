@@ -16,12 +16,15 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
         // Versionnée : l'application mobile installée ne se met pas à jour en même temps que l'API
         apiPrefix: 'api/v1',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->redirectGuestsTo(fn() => null);
+        // Derrière le Nginx de l'hôte (HTTPS) puis celui du conteneur : schéma et IP client réels
+        $middleware->trustProxies(at: '*');
         $middleware->alias([
             'jwt.auth'     => \App\Http\Middleware\JwtAuthenticate::class,
             'role'         => \App\Http\Middleware\EnsureRole::class,

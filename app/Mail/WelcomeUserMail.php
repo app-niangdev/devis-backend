@@ -32,7 +32,7 @@ class WelcomeUserMail extends Mailable
             with: [
                 'user'              => $this->user,
                 'temporaryPassword' => $this->temporaryPassword,
-                'loginUrl'          => rtrim(env('FRONTEND_URL', config('app.url')), '/') . '/auth/login',
+                'loginUrl'          => rtrim(config('app.frontend_url'), '/') . '/auth/login',
             ],
         );
     }
