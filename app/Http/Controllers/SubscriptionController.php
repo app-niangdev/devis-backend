@@ -12,7 +12,7 @@ use Illuminate\Http\Request;
 
 /**
  * Gestion des abonnements des entreprises (administrateur). Le paiement se fait hors de
- * l'application (Wave, Orange Money…) : l'administrateur enregistre la période payée.
+ * l'application (Wave, Orange Money…) : l'administrateur enregistre le forfait payé et sa date de début.
  */
 class SubscriptionController extends Controller
 {
@@ -77,13 +77,13 @@ class SubscriptionController extends Controller
 
     public function store(SubscriptionRequest $request): JsonResponse
     {
-        $validated = $request->validated();
+        $attributes = $this->subscriptions->attributesFor($request->validated());
 
-        if ($conflict = $this->subscriptions->overlapping($validated['tenant_id'], $validated['starts_at'], $validated['ends_at'])) {
+        if ($conflict = $this->subscriptions->overlapping($attributes['tenant_id'], $attributes['starts_at'], $attributes['ends_at'])) {
             return $this->overlapResponse($conflict);
         }
 
-        $subscription = Subscription::create($validated + ['created_by' => $request->user()->id]);
+        $subscription = Subscription::create($attributes + ['created_by' => $request->user()->id]);
 
         return ApiResponse::success($subscription, 'Abonnement enregistré avec succès.', 201);
     }
@@ -91,13 +91,13 @@ class SubscriptionController extends Controller
     public function update(SubscriptionRequest $request, string $id): JsonResponse
     {
         $subscription = Subscription::findOrFail($id);
-        $validated = $request->validated();
+        $attributes = $this->subscriptions->attributesFor($request->validated(), $subscription);
 
-        if ($conflict = $this->subscriptions->overlapping($validated['tenant_id'], $validated['starts_at'], $validated['ends_at'], $subscription->id)) {
+        if ($conflict = $this->subscriptions->overlapping($attributes['tenant_id'], $attributes['starts_at'], $attributes['ends_at'], $subscription->id)) {
             return $this->overlapResponse($conflict);
         }
 
-        $subscription->update($validated);
+        $subscription->update($attributes);
 
         return ApiResponse::success($subscription->fresh(), 'Abonnement modifié avec succès.');
     }

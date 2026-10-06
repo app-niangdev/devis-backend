@@ -22,9 +22,9 @@ class UserSeeder extends Seeder
                 'trade' => 'Plombier',
                 'address' => 'Bargny, Rufisque',
                 'phone_call' => '770906538',
-                'primary_color' => '#1D4ED8',
-                'secondary_color' => '#0F172A',
-                'accent_color' => '#F59E0B',
+                'primary_color' => '#00853F',
+                'secondary_color' => '#17202A',
+                'accent_color' => '#FDEF42',
                 'default_deposit_type' => 'percent',
                 'default_deposit_value' => 30,
             ]

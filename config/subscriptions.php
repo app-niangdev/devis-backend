@@ -9,4 +9,12 @@ return [
     'trial_days' => (int) env('SUBSCRIPTION_TRIAL_DAYS', 30),
 
     'default_currency' => env('SUBSCRIPTION_CURRENCY', 'XOF'),
+
+    // Contact affiché aux gestionnaires pour renouveler (application mobile)
+    'contact' => [
+        'name' => env('SUBSCRIPTION_CONTACT_NAME', 'Administrateur Devis'),
+        'phone' => env('SUBSCRIPTION_CONTACT_PHONE'),
+        'whatsapp' => env('SUBSCRIPTION_CONTACT_WHATSAPP'),
+        'payment_methods' => env('SUBSCRIPTION_PAYMENT_METHODS', 'Wave, Orange Money'),
+    ],
 ];

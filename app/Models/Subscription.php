@@ -11,7 +11,7 @@ class Subscription extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'tenant_id', 'plan', 'amount', 'currency', 'starts_at', 'ends_at', 'notes', 'created_by',
+        'tenant_id', 'subscription_plan_id', 'plan', 'amount', 'currency', 'starts_at', 'ends_at', 'notes', 'created_by',
     ];
 
     protected $hidden = ['deleted_at'];
@@ -28,6 +28,11 @@ class Subscription extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function subscriptionPlan(): BelongsTo
+    {
+        return $this->belongsTo(SubscriptionPlan::class)->withTrashed();
     }
 
     public function creator(): BelongsTo

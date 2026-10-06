@@ -21,6 +21,7 @@ class MenuSeeder extends Seeder
             ['code' => 'tenants',       'title' => 'Entreprises',     'url' => '/tenants',       'icon' => 'bi-buildings-fill',   'breadcrumbs' => true],
             ['code' => 'users',         'title' => 'Utilisateurs',    'url' => '/users',         'icon' => 'bi-people-fill',      'breadcrumbs' => true],
             ['code' => 'subscriptions', 'title' => 'Abonnements',     'url' => '/subscriptions', 'icon' => 'bi-calendar-check-fill', 'breadcrumbs' => true],
+            ['code' => 'subscription-plans', 'title' => 'Forfaits',   'url' => '/subscription-plans', 'icon' => 'bi-tags-fill', 'breadcrumbs' => true],
         ];
 
         foreach ($menus as $position => $menu) {

@@ -1,9 +1,9 @@
 @php
     $money = fn ($v) => number_format((int) $v, 0, ',', ' ') . ' FCFA';
     $qty = fn ($v) => rtrim(rtrim(number_format((float) $v, 3, ',', ' '), '0'), ',');
-    $primary = $tenant->primary_color ?: '#1D4ED8';
-    $secondary = $tenant->secondary_color ?: '#0F172A';
-    $accent = $tenant->accent_color ?: '#F59E0B';
+    $primary = $tenant->primary_color ?: '#00853F';
+    $secondary = $tenant->secondary_color ?: '#17202A';
+    $accent = $tenant->accent_color ?: '#FDEF42';
     $accepted = $quote->status === \App\Models\Quote::ACCEPTED;
     $supplies = $quote->items->where('kind', \App\Models\QuoteItem::SUPPLY);
     $labor = $quote->items->where('kind', \App\Models\QuoteItem::LABOR);
@@ -22,27 +22,27 @@
     <style>
         @page { margin: 14mm 14mm 16mm 14mm; }
         * { box-sizing: border-box; }
-        body { font-family: 'DejaVu Sans', sans-serif; font-size: 9pt; color: #1a1f35; margin: 0; }
+        body { font-family: 'DejaVu Sans', sans-serif; font-size: 9pt; color: #17202A; margin: 0; }
         table { border-collapse: collapse; }
         .head { width: 100%; border-bottom: 2.5px solid {{ $primary }}; padding-bottom: 4mm; }
         .head td { vertical-align: top; padding: 0; }
         .logo { width: 20mm; height: 20mm; }
         .company { font-size: 13pt; font-weight: bold; color: {{ $secondary }}; }
-        .issuer span, .issuer em { display: block; font-size: 8pt; color: #5b6075; margin-top: .6mm; }
+        .issuer span, .issuer em { display: block; font-size: 8pt; color: #5B6670; margin-top: .6mm; }
         .title { text-align: right; }
         .title h1 { margin: 0 0 2mm; font-size: 18pt; color: {{ $primary }}; text-transform: uppercase; letter-spacing: 1px; }
         .title table { margin-left: auto; font-size: 8.5pt; }
         .title td { padding: .4mm 0 .4mm 3mm; }
-        .title td.l { color: #5b6075; text-align: right; }
+        .title td.l { color: #5B6670; text-align: right; }
         .customer { margin: 6mm 0 5mm; padding: 3mm 4mm; background: #f5f6fa; border-left: 3px solid {{ $primary }}; }
-        .label { display: block; font-size: 7pt; color: #5b6075; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 1mm; }
+        .label { display: block; font-size: 7pt; color: #5B6670; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 1mm; }
         .customer strong { font-size: 10.5pt; }
         .object { margin: 0 0 4mm; font-size: 10pt; }
         .accepted { margin: 0 0 4mm; padding: 2mm; text-align: center; font-weight: bold; color: #15803d; border: 1.5px solid #15803d; letter-spacing: 1px; }
         table.lines { width: 100%; }
         table.lines th { background: {{ $secondary }}; color: #fff; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .3px; text-align: left; padding: 2mm; }
         table.lines th.num { text-align: right; }
-        table.lines td { padding: 2mm; border-bottom: 1px solid #e8e9f0; vertical-align: top; }
+        table.lines td { padding: 2mm; border-bottom: 1px solid #E4E9ED; vertical-align: top; }
         table.lines tr.section td { background: #f5f6fa; font-weight: bold; color: {{ $secondary }}; font-size: 8pt; text-transform: uppercase; letter-spacing: .3px; }
         table.lines tr.subtotal td { font-weight: bold; border-bottom: 1.5px solid #d6d8e2; }
         .num { text-align: right; white-space: nowrap; }
@@ -50,17 +50,17 @@
         table.totals td { padding: 1.6mm 2mm; }
         table.totals td.num { font-weight: bold; }
         table.totals tr.total td { border-top: 2px solid {{ $secondary }}; font-size: 11.5pt; font-weight: bold; color: {{ $secondary }}; }
-        table.totals tr.deposit td { background: {{ $accent }}; color: #111; font-weight: bold; }
-        table.totals tr.balance td { color: #5b6075; }
+        table.totals tr.deposit td { background: {{ $accent }}; color: #17202A; font-weight: bold; }
+        table.totals tr.balance td { color: #5B6670; }
         .received { margin-top: 2mm; text-align: right; font-size: 8pt; color: #15803d; }
-        .notes { margin-top: 6mm; padding: 3mm 4mm; border: 1px solid #e8e9f0; }
+        .notes { margin-top: 6mm; padding: 3mm 4mm; border: 1px solid #E4E9ED; }
         .notes p { margin: 0; white-space: pre-line; }
-        .disclaimer { margin-top: 6mm; font-size: 8pt; color: #5b6075; font-style: italic; }
+        .disclaimer { margin-top: 6mm; font-size: 8pt; color: #5B6670; font-style: italic; }
         .stamp { width: 100%; margin-top: 4mm; page-break-inside: avoid; }
         .stamp td { padding: 0; }
         .stamp .cell { width: 46mm; text-align: center; }
         .stamp img { width: 40mm; height: 40mm; margin-top: 1mm; }
-        .foot { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #e8e9f0; text-align: center; font-size: 8pt; color: #5b6075; }
+        .foot { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #E4E9ED; text-align: center; font-size: 8pt; color: #5B6670; }
         .legal { margin-top: 1mm; font-size: 7pt; }
     </style>
 </head>

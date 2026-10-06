@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\Manager\CompanyController;
@@ -10,11 +11,18 @@ use App\Http\Controllers\Manager\QuoteController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\SubscriptionPlanController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 // Préfixe : /api (bootstrap/app.php)
+
+// Version attendue de l'application mobile (public : vérifiée avant la connexion)
+Route::get('app-version', AppVersionController::class)->middleware('throttle:60,1');
+
+// Forfaits proposés et contact pour payer (public : affiché aussi au gestionnaire bloqué)
+Route::get('subscription-offers', [SubscriptionPlanController::class, 'offers'])->middleware('throttle:60,1');
 
 Route::prefix('auth')->name('auth.')->group(function () {
 
@@ -34,9 +42,12 @@ Route::prefix('auth')->name('auth.')->group(function () {
 
     Route::middleware('jwt.auth')->group(function () {
         Route::post('logout',          [AuthController::class, 'logout'])->name('logout');
-        Route::get('me',               [AuthController::class, 'me'])->name('me');
-        Route::put('me',               [AuthController::class, 'updateMe'])->name('update-me');
-        Route::post('change-password', [AuthController::class, 'changePassword'])->name('change-password');
+        // Gestionnaire : coupé aussi ici quand l'abonnement a expiré
+        Route::middleware('subscription')->group(function () {
+            Route::get('me',               [AuthController::class, 'me'])->name('me');
+            Route::put('me',               [AuthController::class, 'updateMe'])->name('update-me');
+            Route::post('change-password', [AuthController::class, 'changePassword'])->name('change-password');
+        });
     });
 });
 
@@ -74,6 +85,15 @@ Route::middleware(['jwt.auth', 'role:ADMIN'])->group(function () {
         Route::delete('/disable/{id}',         [TenantController::class, 'disable']);
         Route::delete('/destroy/{id}/force',   [TenantController::class, 'destroy']);
         Route::post('/restore/{id}',           [TenantController::class, 'restore']);
+    });
+
+    // Types d'abonnement (forfaits) : prix et durée non modifiables
+    Route::prefix('subscription-plans')->group(function () {
+        Route::get('/list',               [SubscriptionPlanController::class, 'index']);
+        Route::post('/add',               [SubscriptionPlanController::class, 'store']);
+        Route::put('/update/{id}',        [SubscriptionPlanController::class, 'update']);
+        Route::put('/toggle-status/{id}', [SubscriptionPlanController::class, 'toggleStatus']);
+        Route::delete('/delete/{id}',     [SubscriptionPlanController::class, 'destroy']);
     });
 
     Route::prefix('subscriptions')->group(function () {

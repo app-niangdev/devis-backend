@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\ApiException;
 use App\Models\Subscription;
+use App\Models\SubscriptionPlan;
 use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -130,6 +131,37 @@ class SubscriptionService
             'notes' => 'Période d\'essai offerte à la création de l\'entreprise.',
             'created_by' => $createdBy,
         ]);
+    }
+
+    /**
+     * Attributs d'un abonnement à partir de la saisie validée : avec un forfait, la date de fin
+     * est calculée et le nom, le montant et la devise sont recopiés (figés pour l'historique).
+     * Sans forfait (essai, anciennes saisies), les dates saisies sont gardées et le montant inchangé.
+     */
+    public function attributesFor(array $data, ?Subscription $existing = null): array
+    {
+        $attributes = [
+            'tenant_id' => $data['tenant_id'],
+            'starts_at' => $data['starts_at'],
+            'notes' => $data['notes'] ?? null,
+        ];
+
+        $planId = $data['subscription_plan_id'] ?? null;
+        if (!$planId) {
+            return $attributes + ['subscription_plan_id' => null, 'ends_at' => $data['ends_at']];
+        }
+
+        $plan = SubscriptionPlan::withTrashed()->findOrFail($planId);
+        $attributes += [
+            'subscription_plan_id' => $plan->id,
+            'ends_at' => $plan->endsAtFor($data['starts_at'])->toDateString(),
+        ];
+
+        if ($existing?->subscription_plan_id !== $plan->id) {
+            $attributes += ['plan' => $plan->name, 'amount' => $plan->price, 'currency' => $plan->currency];
+        }
+
+        return $attributes;
     }
 
     /**
