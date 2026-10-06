@@ -27,7 +27,7 @@ class SubscriptionTest extends TestCase
             ->postJson('/api/tenants/add', ['name' => 'Sow Électricité', 'code_website' => 'sow', 'primary_color' => '#dc2626'])
             ->assertCreated()
             ->assertJsonPath('payload.primary_color', '#DC2626')
-            ->assertJsonPath('payload.secondary_color', '#0F172A')
+            ->assertJsonPath('payload.secondary_color', '#17202A')
             ->json('payload.id');
 
         $this->asUser($this->admin())
