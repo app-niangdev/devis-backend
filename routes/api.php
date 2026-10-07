@@ -127,6 +127,7 @@ Route::prefix('manager')->middleware(['jwt.auth', 'role:MANAGER', 'subscription'
 
     Route::get('/quotes',                    [QuoteController::class, 'index']);
     Route::post('/quotes',                   [QuoteController::class, 'store']);
+    Route::get('/quotes/units',              [QuoteController::class, 'units']);
     Route::get('/quotes/{id}',               [QuoteController::class, 'show'])->whereNumber('id');
     Route::put('/quotes/{id}',               [QuoteController::class, 'update'])->whereNumber('id');
     Route::delete('/quotes/{id}',            [QuoteController::class, 'destroy'])->whereNumber('id');

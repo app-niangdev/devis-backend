@@ -237,4 +237,30 @@ class QuoteTest extends TestCase
             ->assertJsonPath('payload.quotes.expired.count', 1)
             ->assertJsonCount(2, 'payload.awaiting_answer');
     }
+
+    public function test_units_are_ranked_by_use_for_the_tenant(): void
+    {
+        $line = fn (string $unit, string $kind = 'supply') => ['kind' => $kind, 'designation' => 'X', 'unit_name' => $unit, 'quantity' => 1, 'unit_price' => 100];
+
+        $this->createQuote(['discount' => 0, 'items' => [$line('sac'), $line('Kg'), $line('jour', 'labor')]]);
+        $this->createQuote(['discount' => 0, 'items' => [$line('sac'), $line('kg'), $line('kg')]]);
+        $this->createQuote(['discount' => 0, 'items' => [$line('sac'), $line('litre')]]);
+
+        // Une autre entreprise n'influence pas les suggestions
+        $other = $this->tenant();
+        $otherCustomer = Customer::create(['tenant_id' => $other->id, 'name' => 'X', 'phone' => '771112233']);
+        $this->asUser($this->manager($other))->postJson('/api/manager/quotes', $this->payload([
+            'customer' => ['mode' => 'existing', 'id' => $otherCustomer->id],
+            'discount' => 0,
+            'items' => [$line('paire'), $line('paire'), $line('paire'), $line('paire')],
+        ]))->assertCreated();
+
+        $units = $this->asUser($this->manager)->getJson('/api/manager/quotes/units')->assertOk()->json('payload');
+
+        $this->assertSame([
+            ['unit' => 'sac', 'uses' => 3],
+            ['unit' => 'kg', 'uses' => 3],
+            ['unit' => 'litre', 'uses' => 1],
+        ], $units);
+    }
 }

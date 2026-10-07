@@ -6,6 +6,7 @@ use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\QuoteRequest;
 use App\Models\Quote;
+use App\Models\QuoteItem;
 use App\Services\QuoteDocumentService;
 use App\Services\QuoteService;
 use Illuminate\Database\Eloquent\Builder;
@@ -70,6 +71,39 @@ class QuoteController extends Controller
                 'total' => (int) ($counts[$s]->total ?? 0),
             ]])->put('expired', ['count' => $this->expired($base())->count()]),
         ]);
+    }
+
+    /**
+     * Unités les plus utilisées sur les fournitures de l'entreprise (suggestions de la saisie mobile).
+     * Les variantes de casse (« Kg », « kg ») sont regroupées sous l'écriture la plus fréquente.
+     */
+    public function units(Request $request): JsonResponse
+    {
+        $rows = QuoteItem::query()
+            ->join('quotes', 'quotes.id', '=', 'quote_items.quote_id')
+            ->where('quotes.tenant_id', $request->user()->tenant_id)
+            ->whereNull('quotes.deleted_at')
+            ->where('quote_items.kind', QuoteItem::SUPPLY)
+            ->whereNotNull('quote_items.unit_name')
+            ->where('quote_items.unit_name', '!=', '')
+            ->selectRaw('quote_items.unit_name AS unit, COUNT(*) AS uses, MAX(quote_items.id) AS last_id')
+            ->groupBy('quote_items.unit_name')
+            ->get();
+
+        $units = $rows
+            ->groupBy(fn ($row) => mb_strtolower(trim($row->unit)))
+            ->map(fn ($variants) => [
+                'unit' => trim($variants->sortByDesc('uses')->first()->unit),
+                'uses' => (int) $variants->sum('uses'),
+                'last_id' => (int) $variants->max('last_id'),
+            ])
+            // À égalité, la plus récemment utilisée d'abord
+            ->sortBy([['uses', 'desc'], ['last_id', 'desc']])
+            ->take(12)
+            ->map(fn ($u) => ['unit' => $u['unit'], 'uses' => $u['uses']])
+            ->values();
+
+        return ApiResponse::success($units);
     }
 
     public function show(Request $request, string $id): JsonResponse
