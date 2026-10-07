@@ -31,8 +31,9 @@ Route::prefix('auth')->name('auth.')->group(function () {
         Route::post('refresh', [AuthController::class, 'refresh'])->name('refresh');
     });
 
-    // Codes OTP WhatsApp : première connexion, numéro modifié, mot de passe oublié
+    // Codes OTP WhatsApp : inscription, première connexion, numéro modifié, mot de passe oublié
     Route::middleware('throttle:otp')->group(function () {
+        Route::post('register',        [AuthController::class, 'register'])->middleware('throttle:signup')->name('register');
         Route::post('otp/verify',      [AuthController::class, 'verifyOtp'])->name('otp.verify');
         Route::post('otp/resend',      [AuthController::class, 'resendOtp'])->name('otp.resend');
         Route::post('password/set',    [AuthController::class, 'setPassword'])->name('password.set');
@@ -85,6 +86,9 @@ Route::middleware(['jwt.auth', 'role:ADMIN'])->group(function () {
         Route::delete('/disable/{id}',         [TenantController::class, 'disable']);
         Route::delete('/destroy/{id}/force',   [TenantController::class, 'destroy']);
         Route::post('/restore/{id}',           [TenantController::class, 'restore']);
+        // Inscriptions faites depuis l'application
+        Route::put('/approve/{id}',            [TenantController::class, 'approve']);
+        Route::put('/reject/{id}',             [TenantController::class, 'reject']);
     });
 
     // Types d'abonnement (forfaits) : prix et durée non modifiables

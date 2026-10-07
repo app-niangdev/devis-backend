@@ -8,9 +8,10 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class TenantRepository implements TenantRepositoryInterface
 {
-    public function paginate(int $perPage, string $search): LengthAwarePaginator
+    public function paginate(int $perPage, string $search, ?string $approvalStatus = null): LengthAwarePaginator
     {
         return Tenant::query()
+            ->when($approvalStatus, fn ($query) => $query->where('approval_status', $approvalStatus))
             ->when($search, function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->whereLike('name', "%{$search}%")

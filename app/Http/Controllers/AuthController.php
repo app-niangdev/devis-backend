@@ -7,14 +7,17 @@ use App\Helpers\ApiResponse;
 use App\Http\Requests\ChangePasswordRequest;
 use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\LoginRequest;
+use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\ResetPasswordRequest;
 use App\Http\Requests\SetPasswordRequest;
 use App\Http\Requests\UpdateProfileRequest;
 use App\Http\Requests\VerifyOtpRequest;
 use App\Mail\ResetPasswordMail;
 use App\Models\OtpChallenge;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\OtpService;
+use App\Services\SignupService;
 use App\Services\SubscriptionService;
 use App\Services\TokenService;
 use Illuminate\Http\JsonResponse;
@@ -30,6 +33,9 @@ use Illuminate\Support\Facades\RateLimiter;
  * Gestionnaire : téléphone + mot de passe. Un code OTP WhatsApp n'est demandé qu'à la première
  * connexion (puis choix du mot de passe), après un changement de numéro par l'administrateur,
  * et pour le mot de passe oublié. Administrateur : e-mail + mot de passe.
+ *
+ * Inscription depuis l'application : le numéro est confirmé par code WhatsApp,
+ * puis l'administrateur valide le compte avant la première connexion.
  */
 class AuthController extends Controller
 {
@@ -40,7 +46,22 @@ class AuthController extends Controller
         private readonly TokenService $tokens,
         private readonly OtpService $otp,
         private readonly SubscriptionService $subscriptions,
+        private readonly SignupService $signups,
     ) {}
+
+    // -------------------------------------------------------------------------
+    // REGISTER (artisan, depuis l'application)
+    // -------------------------------------------------------------------------
+    public function register(RegisterRequest $request): JsonResponse
+    {
+        $challenge = $this->signups->register($request->validated(), $request->ip());
+
+        return ApiResponse::success(
+            $this->otp->describe($challenge),
+            'Un code de confirmation vous a été envoyé sur WhatsApp.',
+            201,
+        );
+    }
 
     // -------------------------------------------------------------------------
     // LOGIN
@@ -73,6 +94,12 @@ class AuthController extends Controller
         }
 
         RateLimiter::clear($throttleKey);
+
+        // Inscription interrompue avant la saisie du code : on renvoie un code pour la terminer
+        if ($user->isManager() && $user->tenant?->isPending() && !$user->phone_verified_at) {
+            return $this->otpStep($this->otp->start($user, OtpChallenge::SIGNUP, $request->ip()));
+        }
+
         $this->ensureCanSignIn($user);
 
         if ($user->isManager()) {
@@ -106,9 +133,19 @@ class AuthController extends Controller
             ], 'Code vérifié. Choisissez votre nouveau mot de passe.');
         }
 
-        // Confirmation du numéro : la connexion se termine
         $user = $result['challenge']->user;
         $user->update(['phone_verified_at' => now()]);
+
+        // Inscription : numéro confirmé, la demande attend l'administrateur (aucun jeton)
+        if ($result['challenge']->purpose === OtpChallenge::SIGNUP) {
+            return ApiResponse::success(
+                ['step' => 'pending_approval'],
+                'Numéro confirmé ! Votre demande d\'inscription est en cours de validation. '
+                    . 'Vous serez prévenu sur WhatsApp dès l\'activation de votre compte.',
+            );
+        }
+
+        // Confirmation du numéro : la connexion se termine
         $this->ensureCanSignIn($user);
 
         return ApiResponse::success($this->tokens->issue($user), 'Numéro confirmé. Connexion réussie.');
@@ -317,7 +354,34 @@ class AuthController extends Controller
         }
 
         if ($user->isManager()) {
+            $this->ensureApproved($user->tenant);
             $this->subscriptions->ensureAccessible($user->tenant);
+        }
+    }
+
+    /**
+     * Inscription faite depuis l'application : accès ouvert seulement après validation.
+     *
+     * @throws ApiException
+     */
+    private function ensureApproved(?Tenant $tenant): void
+    {
+        if ($tenant?->isPending()) {
+            throw new ApiException(
+                'Votre inscription est en cours de validation. Vous serez prévenu sur WhatsApp dès l\'activation de votre compte.',
+                'ACCOUNT_PENDING',
+                403,
+            );
+        }
+
+        if ($tenant?->isRejected()) {
+            throw new ApiException(
+                'Votre demande d\'inscription n\'a pas été retenue.'
+                    . ($tenant->rejection_reason ? ' Motif : ' . $tenant->rejection_reason : '')
+                    . ' Contactez SN Devis pour plus d\'informations.',
+                'ACCOUNT_REJECTED',
+                403,
+            );
         }
     }
 

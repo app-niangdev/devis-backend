@@ -7,7 +7,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 interface TenantRepositoryInterface
 {
-    public function paginate(int $perPage, string $search): LengthAwarePaginator;
+    public function paginate(int $perPage, string $search, ?string $approvalStatus = null): LengthAwarePaginator;
 
     public function findById(int|string $id): Tenant;
 

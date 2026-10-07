@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
 /**
- * Codes à usage unique envoyés sur WhatsApp (WAHA) : première connexion, mot de passe oublié
- * et confirmation d'un numéro modifié par l'administrateur.
+ * Codes à usage unique envoyés sur WhatsApp (WAHA) : première connexion, mot de passe oublié,
+ * confirmation d'un numéro modifié par l'administrateur et inscription depuis l'application.
  *
  * Le code n'est jamais renvoyé au client ni stocké en clair. Après un code valide, les parcours
  * qui se terminent par un nouveau mot de passe reçoivent un jeton de réinitialisation de courte durée.
@@ -227,6 +227,7 @@ class OtpService
         $app = config('otp.app_name');
         $text = match ($challenge->purpose) {
             OtpChallenge::FIRST_LOGIN => "*{$app}* : votre code d'activation est *{$code}*.\nValable {$minutes} min. Ne le communiquez à personne.",
+            OtpChallenge::SIGNUP => "*{$app}* : votre code de confirmation d'inscription est *{$code}*.\nValable {$minutes} min. Ne le communiquez à personne.",
             OtpChallenge::PASSWORD_RESET => "*{$app}* : votre code de réinitialisation du mot de passe est *{$code}*.\nValable {$minutes} min. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.",
             default => "*{$app}* : votre code de confirmation est *{$code}*.\nValable {$minutes} min. Ne le communiquez à personne.",
         };

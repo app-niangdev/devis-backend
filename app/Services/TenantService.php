@@ -27,9 +27,9 @@ class TenantService implements TenantServiceInterface
         private readonly SubscriptionService $subscriptions,
     ) {}
 
-    public function list(int $perPage, string $search): LengthAwarePaginator
+    public function list(int $perPage, string $search, ?string $approvalStatus = null): LengthAwarePaginator
     {
-        return $this->tenantRepository->paginate($perPage, $search);
+        return $this->tenantRepository->paginate($perPage, $search, $approvalStatus);
     }
 
     public function find(int|string $id): Tenant

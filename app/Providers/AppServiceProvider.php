@@ -46,5 +46,7 @@ class AppServiceProvider extends ServiceProvider
         // Les limites par compte (mots de passe faux, codes envoyés) sont dans les services.
         RateLimiter::for('auth', fn (Request $request) => Limit::perMinute(40)->by('auth|' . $request->ip()));
         RateLimiter::for('otp', fn (Request $request) => Limit::perMinute(30)->by('otp|' . $request->ip()));
+        // Inscriptions : large (adresses IP partagées par les opérateurs mobiles) mais contre les créations en masse
+        RateLimiter::for('signup', fn (Request $request) => Limit::perHour(20)->by('signup|' . $request->ip()));
     }
 }

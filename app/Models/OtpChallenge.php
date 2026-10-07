@@ -10,6 +10,8 @@ class OtpChallenge extends Model
     public const FIRST_LOGIN = 'first_login';
     public const PASSWORD_RESET = 'password_reset';
     public const PHONE_VERIFICATION = 'phone_verification';
+    /** Inscription depuis l'application : confirmation du numéro avant validation par l'administrateur. */
+    public const SIGNUP = 'signup';
 
     protected $fillable = [
         'user_id', 'purpose', 'challenge_token', 'code_hash', 'attempts', 'resend_count',

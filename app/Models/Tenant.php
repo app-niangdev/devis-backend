@@ -16,10 +16,16 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'default_deposit_type', 'default_deposit_value', 'quote_validity_days', 'quote_footer',
     'stamp_enabled', 'stamp_color',
     'short_name', 'state',
+    'approval_status', 'approval_reviewed_at', 'approval_reviewed_by', 'rejection_reason',
 ])]
 class Tenant extends Model
 {
     use SoftDeletes;
+
+    /** Validation de l'inscription faite depuis l'application (créée par l'administrateur : validée). */
+    public const APPROVED = 'approved';
+    public const PENDING = 'pending';
+    public const REJECTED = 'rejected';
 
     protected function casts(): array
     {
@@ -28,6 +34,7 @@ class Tenant extends Model
             'stamp_enabled' => 'boolean',
             'default_deposit_value' => 'integer',
             'quote_validity_days' => 'integer',
+            'approval_reviewed_at' => 'datetime',
         ];
     }
 
@@ -36,6 +43,16 @@ class Tenant extends Model
         'updated_at',
         'deleted_at',
     ];
+
+    public function isPending(): bool
+    {
+        return $this->approval_status === self::PENDING;
+    }
+
+    public function isRejected(): bool
+    {
+        return $this->approval_status === self::REJECTED;
+    }
 
     public function users(): HasMany
     {

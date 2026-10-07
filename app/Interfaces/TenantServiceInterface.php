@@ -7,7 +7,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 interface TenantServiceInterface
 {
-    public function list(int $perPage, string $search): LengthAwarePaginator;
+    public function list(int $perPage, string $search, ?string $approvalStatus = null): LengthAwarePaginator;
 
     public function find(int|string $id): Tenant;
 
