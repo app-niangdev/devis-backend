@@ -86,9 +86,6 @@ Route::middleware(['jwt.auth', 'role:ADMIN'])->group(function () {
         Route::delete('/disable/{id}',         [TenantController::class, 'disable']);
         Route::delete('/destroy/{id}/force',   [TenantController::class, 'destroy']);
         Route::post('/restore/{id}',           [TenantController::class, 'restore']);
-        // Inscriptions faites depuis l'application
-        Route::put('/approve/{id}',            [TenantController::class, 'approve']);
-        Route::put('/reject/{id}',             [TenantController::class, 'reject']);
     });
 
     // Types d'abonnement (forfaits) : prix et durée non modifiables

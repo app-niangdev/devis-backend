@@ -22,10 +22,12 @@ class Tenant extends Model
 {
     use SoftDeletes;
 
-    /** Validation de l'inscription faite depuis l'application (créée par l'administrateur : validée). */
+    /**
+     * Inscription faite depuis l'application : « pending » jusqu'à la confirmation du numéro
+     * par code WhatsApp, puis « approved ». Créée par l'administrateur : « approved » d'office.
+     */
     public const APPROVED = 'approved';
     public const PENDING = 'pending';
-    public const REJECTED = 'rejected';
 
     protected function casts(): array
     {
@@ -47,11 +49,6 @@ class Tenant extends Model
     public function isPending(): bool
     {
         return $this->approval_status === self::PENDING;
-    }
-
-    public function isRejected(): bool
-    {
-        return $this->approval_status === self::REJECTED;
     }
 
     public function users(): HasMany

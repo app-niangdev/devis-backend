@@ -263,4 +263,32 @@ class QuoteTest extends TestCase
             ['unit' => 'litre', 'uses' => 1],
         ], $units);
     }
+
+    public function test_dashboard_can_be_filtered_by_year_month_or_date(): void
+    {
+        $at = fn (string $date) => Quote::whereKey($this->createQuote(['discount' => 0])['id'])->update(['created_at' => $date]);
+        $at('2024-03-10 09:00:00');
+        $at('2025-06-02 10:00:00');
+        $at('2025-06-20 15:00:00');
+        $at('2025-11-05 08:00:00');
+
+        $dashboard = fn (string $query = '') => $this->asUser($this->manager)->getJson('/api/manager/dashboard' . $query)->assertOk();
+
+        // Sans filtre : tout l'historique, et les années depuis le premier devis
+        $dashboard()
+            ->assertJsonPath('payload.quotes.draft.count', 4)
+            ->assertJsonPath('payload.period', null)
+            ->assertJsonPath('payload.years', range((int) now()->year, 2024));
+
+        $dashboard('?year=2025')
+            ->assertJsonPath('payload.quotes.draft.count', 3)
+            ->assertJsonPath('payload.period', ['from' => '2025-01-01', 'to' => '2025-12-31']);
+        $dashboard('?year=2025&month=6')
+            ->assertJsonPath('payload.quotes.draft.count', 2)
+            ->assertJsonPath('payload.month.created', 2);
+        $dashboard('?date=2025-06-20')->assertJsonPath('payload.quotes.draft.count', 1);
+
+        // Mois hors bornes
+        $this->asUser($this->manager)->getJson('/api/manager/dashboard?month=13')->assertStatus(422);
+    }
 }

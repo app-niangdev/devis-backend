@@ -2,14 +2,12 @@
 
 namespace App\Services;
 
-use App\Exceptions\ApiException;
 use App\Models\OtpChallenge;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\SenegalPhone;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -17,9 +15,8 @@ use Illuminate\Validation\ValidationException;
  * Inscription d'un artisan depuis l'application mobile.
  *
  * 1. Formulaire : entreprise « en attente » et compte gestionnaire, puis code WhatsApp.
- * 2. Code valide : numéro confirmé, la demande apparaît chez l'administrateur.
- * 3. L'administrateur valide (période d'essai offerte à partir de ce jour) ou refuse ;
- *    l'artisan est prévenu sur WhatsApp.
+ * 2. Code valide : numéro confirmé, l'entreprise est activée avec sa période d'essai
+ *    et l'artisan est connecté.
  */
 class SignupService
 {
@@ -64,59 +61,22 @@ class SignupService
     }
 
     /**
-     * Ouvre l'accès : période d'essai à partir d'aujourd'hui, puis message WhatsApp.
-     *
-     * @throws ApiException
+     * Numéro confirmé : l'entreprise est activée et sa période d'essai démarre aujourd'hui.
+     * Sans effet si elle l'est déjà.
      */
-    public function approve(Tenant $tenant, User $admin): Tenant
+    public function activate(Tenant $tenant): Tenant
     {
-        $this->ensurePending($tenant);
-        $manager = $this->manager($tenant);
-
-        if (!$manager?->phone_verified_at) {
-            throw new ApiException(
-                'Le numéro de cet artisan n\'est pas encore confirmé : il doit d\'abord saisir le code reçu sur WhatsApp.',
-                'PHONE_NOT_VERIFIED',
-                422,
-            );
+        if (!$tenant->isPending()) {
+            return $tenant;
         }
 
-        DB::transaction(function () use ($tenant, $admin) {
+        DB::transaction(function () use ($tenant) {
             $tenant->update([
                 'approval_status' => Tenant::APPROVED,
                 'approval_reviewed_at' => now(),
-                'approval_reviewed_by' => $admin->id,
-                'rejection_reason' => null,
             ]);
-            $this->subscriptions->createTrial($tenant, $admin->id);
+            $this->subscriptions->createTrial($tenant);
         });
-
-        $days = (int) config('subscriptions.trial_days', 30);
-        $this->notify($manager, "Bonne nouvelle {$manager->first_name} ! Votre compte *{$this->appName()}* est activé"
-            . ($days > 0 ? " avec {$days} jours d'essai gratuits" : '') . ".\n"
-            . 'Connectez-vous dans l\'application avec votre numéro et votre mot de passe.');
-
-        return $tenant->fresh();
-    }
-
-    /**
-     * @throws ApiException
-     */
-    public function reject(Tenant $tenant, User $admin, ?string $reason): Tenant
-    {
-        $this->ensurePending($tenant);
-
-        $tenant->update([
-            'approval_status' => Tenant::REJECTED,
-            'approval_reviewed_at' => now(),
-            'approval_reviewed_by' => $admin->id,
-            'rejection_reason' => $reason,
-        ]);
-
-        if ($manager = $this->manager($tenant)) {
-            $this->notify($manager, "Bonjour {$manager->first_name}, votre demande d'inscription à *{$this->appName()}* n'a pas été retenue."
-                . ($reason ? "\nMotif : {$reason}" : ''));
-        }
 
         return $tenant->fresh();
     }
@@ -145,11 +105,9 @@ class SignupService
             return;
         }
 
-        throw ValidationException::withMessages(['phone' => match (true) {
-            (bool) $tenant?->isPending() => 'Une demande d\'inscription est déjà en cours de validation pour ce numéro.',
-            (bool) $tenant?->isRejected() => 'La demande d\'inscription de ce numéro a été refusée. Contactez SN Devis pour plus d\'informations.',
-            default => 'Ce numéro est déjà inscrit. Connectez-vous ou utilisez « Mot de passe oublié ».',
-        }]);
+        throw ValidationException::withMessages([
+            'phone' => 'Ce numéro est déjà inscrit. Connectez-vous ou utilisez « Mot de passe oublié ».',
+        ]);
     }
 
     /**
@@ -167,19 +125,6 @@ class SignupService
         }
     }
 
-    /** @throws ApiException */
-    private function ensurePending(Tenant $tenant): void
-    {
-        if (!$tenant->isPending()) {
-            throw new ApiException('Cette inscription a déjà été traitée.', 'SIGNUP_ALREADY_REVIEWED', 422);
-        }
-    }
-
-    private function manager(Tenant $tenant): ?User
-    {
-        return $tenant->users()->with('role')->get()->first(fn (User $user) => $user->isManager());
-    }
-
     /** Code unique de l'entreprise, dérivé de son nom (« menuiserie-diop-k3f9 »). */
     private function uniqueCode(string $name): string
     {
@@ -190,26 +135,5 @@ class SignupService
         } while (Tenant::withTrashed()->where('code_website', $code)->exists());
 
         return $code;
-    }
-
-    /** Message d'information : un échec d'envoi ne doit pas annuler la décision de l'administrateur. */
-    private function notify(User $user, string $text): void
-    {
-        if (!$this->waha->isConfigured()) {
-            Log::info('Message WhatsApp non envoyé (WAHA non configuré)', ['user_id' => $user->id, 'text' => $text]);
-
-            return;
-        }
-
-        try {
-            $this->waha->sendText((string) SenegalPhone::chatId($user->phone_one), $text);
-        } catch (\Throwable $e) {
-            Log::warning('Message WhatsApp d\'inscription non envoyé', ['user_id' => $user->id, 'error' => $e->getMessage()]);
-        }
-    }
-
-    private function appName(): string
-    {
-        return (string) config('otp.app_name');
     }
 }

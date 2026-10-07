@@ -7,7 +7,6 @@ use App\Http\Requests\StoreTenantRequest;
 use App\Http\Requests\UpdateTenantRequest;
 use App\Interfaces\TenantServiceInterface;
 use App\Models\Tenant;
-use App\Services\SignupService;
 use App\Services\SubscriptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,7 +18,6 @@ class TenantController extends Controller
     public function __construct(
         private readonly TenantServiceInterface $tenantService,
         private readonly SubscriptionService $subscriptions,
-        private readonly SignupService $signups,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -27,7 +25,7 @@ class TenantController extends Controller
         Gate::authorize('admin');
 
         $request->validate([
-            'approval_status' => ['nullable', Rule::in([Tenant::APPROVED, Tenant::PENDING, Tenant::REJECTED])],
+            'approval_status' => ['nullable', Rule::in([Tenant::APPROVED, Tenant::PENDING])],
         ]);
 
         $tenants = $this->tenantService->list(
@@ -95,29 +93,6 @@ class TenantController extends Controller
         return ApiResponse::success($tenant, 'Entreprise réactivée avec succès.');
     }
 
-    /** Inscription faite depuis l'application : ouvre l'accès avec la période d'essai. */
-    public function approve(Request $request, string $id): JsonResponse
-    {
-        Gate::authorize('admin');
-
-        $tenant = $this->signups->approve($this->tenantService->find($id), $request->user());
-
-        return ApiResponse::success($this->present($tenant), "Compte de « {$tenant->name} » activé. L'artisan a été prévenu sur WhatsApp.");
-    }
-
-    public function reject(Request $request, string $id): JsonResponse
-    {
-        Gate::authorize('admin');
-
-        $data = $request->validate(['reason' => ['nullable', 'string', 'max:255']], [
-            'reason.max' => 'Le motif ne doit pas dépasser 255 caractères.',
-        ]);
-
-        $tenant = $this->signups->reject($this->tenantService->find($id), $request->user(), $data['reason'] ?? null);
-
-        return ApiResponse::success($this->present($tenant), "Demande de « {$tenant->name} » refusée.");
-    }
-
     /** Entreprise, son gestionnaire et l'état de son abonnement. */
     private function present(Tenant $tenant): array
     {
@@ -131,7 +106,7 @@ class TenantController extends Controller
                 ])
                 ->values(),
             'subscription' => $this->subscriptions->statusForTenant($tenant),
-            // Date de la demande, pour les inscriptions faites depuis l'application
+            // Date d'inscription (inscriptions faites depuis l'application)
             'registered_at' => $tenant->created_at?->toIso8601String(),
         ];
     }

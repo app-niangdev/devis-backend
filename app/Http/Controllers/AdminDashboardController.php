@@ -23,9 +23,8 @@ class AdminDashboardController extends Controller
 
     public function __invoke(): JsonResponse
     {
-        $all = Tenant::with('subscriptions')->get();
-        // Inscriptions en attente ou refusées : pas encore clientes, hors statistiques
-        $tenants = $all->where('approval_status', Tenant::APPROVED)->values();
+        // Inscriptions dont le numéro n'est pas encore confirmé : pas encore clientes, hors statistiques
+        $tenants = Tenant::with('subscriptions')->where('approval_status', Tenant::APPROVED)->get();
         $statuses = $tenants
             ->map(fn (Tenant $tenant) => $this->subscriptions->statusForTenant($tenant) + ['tenant_active' => $tenant->state]);
 
@@ -38,11 +37,6 @@ class AdminDashboardController extends Controller
                 'active' => $statuses->where('tenant_active', true)->count(),
             ],
             'managers' => User::where('role_id', $managerRoleId)->count(),
-            // Inscriptions depuis l'application à valider (numéro confirmé)
-            'pending_signups' => $all
-                ->where('approval_status', Tenant::PENDING)
-                ->filter(fn (Tenant $tenant) => User::where('tenant_id', $tenant->id)->whereNotNull('phone_verified_at')->exists())
-                ->count(),
             'subscriptions' => collect([
                 SubscriptionService::ACTIVE, SubscriptionService::EXPIRING, SubscriptionService::EXPIRED, SubscriptionService::NONE,
             ])->mapWithKeys(fn ($state) => [$state => $statuses->where('state', $state)->count()]),
